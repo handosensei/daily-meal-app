@@ -1,0 +1,67 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Daily Meal API",
+    "summary": "Contrat d'interface consulte par l'application Daily Meal.",
+    "description": "Ce contrat Swagger/OpenAPI reference les endpoints backend disponibles pour l'application mobile. Aucun endpoint backend n'est expose dans ce depot pour le moment.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Backend local"
+    },
+    {
+      "url": "https://api.dailymeal.example",
+      "description": "Backend de production a remplacer au deploiement"
+    }
+  ],
+  "tags": [
+    {
+      "name": "System",
+      "description": "Endpoints techniques transverses."
+    }
+  ],
+  "paths": {},
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Jeton d'authentification envoye dans l'en-tete Authorization."
+      }
+    },
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code stable exploitable par le frontend.",
+            "examples": [
+              "VALIDATION_ERROR"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Message lisible par un humain.",
+            "examples": [
+              "La requete est invalide."
+            ]
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Informations de diagnostic optionnelles."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
