@@ -1,66 +1,555 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "Returns the current status of the Daily Meal API for health checks and frontend availability checks.",
+        "operationId": "AppController_getStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns the API status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiStatusDto"
+                },
+                "example": {
+                  "name": "daily-meal-api",
+                  "status": "ok"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get API status",
+        "tags": [
+          "status"
+        ]
+      }
+    },
+    "/users": {
+      "post": {
+        "description": "Creates a user account from personal details and matching password fields. The password is never returned in the response.",
+        "operationId": "UsersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequestDto"
+              },
+              "examples": {
+                "registration": {
+                  "summary": "Valid registration payload",
+                  "value": {
+                    "lastname": "Doe",
+                    "firstname": "Jane",
+                    "email": "jane.doe@example.com",
+                    "password": "Str0ngPassword!",
+                    "passwordConfirmation": "Str0ngPassword!"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Creates a user account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicUserDto"
+                },
+                "example": {
+                  "id": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
+                  "lastname": "Doe",
+                  "firstname": "Jane",
+                  "email": "jane.doe@example.com",
+                  "createdAt": "2026-07-13T10:15:30.000Z",
+                  "lastLogin": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The registration payload is invalid or passwordConfirmation does not match password.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "statusCode": 400,
+                      "message": [
+                        "email must be an email"
+                      ],
+                      "error": "Bad Request"
+                    }
+                  },
+                  "passwordConfirmation": {
+                    "summary": "Password confirmation mismatch",
+                    "value": {
+                      "statusCode": 400,
+                      "message": "passwordConfirmation must match password",
+                      "error": "Bad Request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A user with this email already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "example": {
+                  "statusCode": 409,
+                  "message": "A user with this email already exists",
+                  "error": "Conflict"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Register a user",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "Authenticates a user with email and password, then returns a stateless JWT access token valid for 24 hours.",
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequestDto"
+              },
+              "examples": {
+                "login": {
+                  "summary": "Valid login payload",
+                  "value": {
+                    "email": "jane.doe@example.com",
+                    "password": "Str0ngPassword!"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Returns a JWT access token valid for 24 hours.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "tokenType": "Bearer",
+                  "expiresIn": 86400
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The login payload is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": [
+                    "email must be an email"
+                  ],
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The email or password is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Invalid email or password",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authenticate a user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/groups": {
+      "post": {
+        "description": "Creates a group for the authenticated user. The creator and creation date are assigned by the server.",
+        "operationId": "GroupsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupRequestDto"
+              },
+              "examples": {
+                "creation": {
+                  "summary": "Valid group creation payload",
+                  "value": {
+                    "name": "Family dinners"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Creates a group for the authenticated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupResponseDto"
+                },
+                "example": {
+                  "id": "a590d72e-4a13-4a68-8e73-1f8c2c905f53",
+                  "name": "Family dinners",
+                  "createdBy": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
+                  "createdAt": "2026-07-20T10:15:30.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The group creation payload is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": [
+                    "name should not be empty"
+                  ],
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request is missing a valid Bearer access token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "missingToken": {
+                    "summary": "Missing token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Authentication required",
+                      "error": "Unauthorized"
+                    }
+                  },
+                  "invalidToken": {
+                    "summary": "Invalid token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Invalid access token",
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a group",
+        "tags": [
+          "groups"
+        ]
+      }
+    }
+  },
   "info": {
     "title": "Daily Meal API",
-    "summary": "Contrat d'interface consulte par l'application Daily Meal.",
-    "description": "Ce contrat Swagger/OpenAPI reference les endpoints backend disponibles pour l'application mobile. Aucun endpoint backend n'est expose dans ce depot pour le moment.",
-    "version": "0.1.0"
+    "description": "Interface contract for Daily Meal frontend clients.",
+    "version": "0.1.0",
+    "contact": {}
   },
-  "servers": [
-    {
-      "url": "http://localhost:3000",
-      "description": "Backend local"
-    },
-    {
-      "url": "https://api.dailymeal.example",
-      "description": "Backend de production a remplacer au deploiement"
-    }
-  ],
-  "tags": [
-    {
-      "name": "System",
-      "description": "Endpoints techniques transverses."
-    }
-  ],
-  "paths": {},
+  "tags": [],
+  "servers": [],
   "components": {
     "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
+      "bearer": {
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Jeton d'authentification envoye dans l'en-tete Authorization."
+        "type": "http"
       }
     },
     "schemas": {
-      "ApiError": {
+      "ApiStatusDto": {
         "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
         "properties": {
-          "code": {
+          "name": {
             "type": "string",
-            "description": "Code stable exploitable par le frontend.",
-            "examples": [
-              "VALIDATION_ERROR"
-            ]
+            "example": "daily-meal-api"
           },
-          "message": {
+          "status": {
             "type": "string",
-            "description": "Message lisible par un humain.",
-            "examples": [
-              "La requete est invalide."
-            ]
-          },
-          "details": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Informations de diagnostic optionnelles."
+            "example": "ok"
           }
         },
-        "additionalProperties": false
+        "required": [
+          "name",
+          "status"
+        ]
+      },
+      "CreateUserRequestDto": {
+        "type": "object",
+        "properties": {
+          "lastname": {
+            "type": "string",
+            "description": "User last name.",
+            "minLength": 2,
+            "example": "Doe"
+          },
+          "firstname": {
+            "type": "string",
+            "description": "User first name.",
+            "minLength": 2,
+            "example": "Jane"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email address.",
+            "minLength": 6,
+            "example": "jane.doe@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password.",
+            "minLength": 8,
+            "example": "Str0ngPassword!"
+          },
+          "passwordConfirmation": {
+            "type": "string",
+            "description": "Password confirmation. It must match the password field.",
+            "minLength": 8,
+            "example": "Str0ngPassword!"
+          }
+        },
+        "required": [
+          "lastname",
+          "firstname",
+          "email",
+          "password",
+          "passwordConfirmation"
+        ]
+      },
+      "PublicUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique user identifier.",
+            "example": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2"
+          },
+          "lastname": {
+            "type": "string",
+            "example": "Doe"
+          },
+          "firstname": {
+            "type": "string",
+            "example": "Jane"
+          },
+          "email": {
+            "type": "string",
+            "example": "jane.doe@example.com"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Account creation date and time.",
+            "example": "2026-07-13T10:15:30.000Z"
+          },
+          "lastLogin": {
+            "type": "object",
+            "description": "Last login date and time, null when the user never logged in.",
+            "format": "date-time",
+            "nullable": true,
+            "example": null
+          }
+        },
+        "required": [
+          "id",
+          "lastname",
+          "firstname",
+          "email",
+          "createdAt",
+          "lastLogin"
+        ]
+      },
+      "ErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP status code.",
+            "example": 400
+          },
+          "message": {
+            "description": "Human-readable error details.",
+            "oneOf": [
+              {
+                "type": "string",
+                "example": "passwordConfirmation must match password"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "email must be an email"
+                ]
+              }
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "HTTP error reason.",
+            "example": "Bad Request"
+          }
+        },
+        "required": [
+          "statusCode",
+          "message",
+          "error"
+        ]
+      },
+      "LoginRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address.",
+            "example": "jane.doe@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password.",
+            "minLength": 8,
+            "example": "Str0ngPassword!"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT access token.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "Token type to use in the Authorization header.",
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "Token lifetime in seconds.",
+            "example": 86400
+          }
+        },
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn"
+        ]
+      },
+      "CreateGroupRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name.",
+            "maxLength": 120,
+            "example": "Family dinners"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "GroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique group identifier.",
+            "example": "a590d72e-4a13-4a68-8e73-1f8c2c905f53"
+          },
+          "name": {
+            "type": "string",
+            "description": "Group name.",
+            "example": "Family dinners"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Identifier of the user who created the group.",
+            "example": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Group creation date and time.",
+            "example": "2026-07-20T10:15:30.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdBy",
+          "createdAt"
+        ]
       }
     }
   }
