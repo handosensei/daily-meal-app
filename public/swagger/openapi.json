@@ -68,6 +68,8 @@
                   "lastname": "Doe",
                   "firstname": "Jane",
                   "email": "jane.doe@example.com",
+                  "provider": null,
+                  "emailVerified": false,
                   "createdAt": "2026-07-13T10:15:30.000Z",
                   "lastLogin": null
                 }
@@ -205,9 +207,87 @@
         ]
       }
     },
+    "/auth/google": {
+      "post": {
+        "description": "Verifies a Google ID token for the configured OAuth client, creates the user account when it does not exist, then returns a stateless JWT access token valid for 24 hours.",
+        "operationId": "AuthController_loginWithGoogle",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleLoginRequestDto"
+              },
+              "examples": {
+                "googleLogin": {
+                  "summary": "Valid Google login payload",
+                  "value": {
+                    "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Returns a JWT access token valid for 24 hours.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "tokenType": "Bearer",
+                  "expiresIn": 86400
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The Google login payload is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": [
+                    "idToken must be longer than or equal to 20 characters"
+                  ],
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The Google ID token is invalid or the email is unverified.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Invalid Google ID token",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authenticate a user with Google",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/groups": {
       "post": {
-        "description": "Creates a group for the authenticated user. The creator and creation date are assigned by the server.",
+        "description": "Creates a group for the authenticated user. The creator and creation date are assigned by the server, and the creator is added as an active admin member.",
         "operationId": "GroupsController_create",
         "parameters": [],
         "requestBody": {
@@ -299,6 +379,75 @@
         "summary": "Create a group",
         "tags": [
           "groups"
+        ]
+      }
+    },
+    "/me/groups": {
+      "get": {
+        "description": "Lists the active groups the authenticated user belongs to, including groups they created, with the active member count and the user role in each group.",
+        "operationId": "MeController_listGroups",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns the authenticated user groups.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MeGroupResponseDto"
+                  }
+                },
+                "example": [
+                  {
+                    "id": "a590d72e-4a13-4a68-8e73-1f8c2c905f53",
+                    "name": "Family dinners",
+                    "createdBy": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
+                    "createdAt": "2026-07-20T10:15:30.000Z",
+                    "membersCount": 2,
+                    "role": "admin"
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "description": "The request is missing a valid Bearer access token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "missingToken": {
+                    "summary": "Missing token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Authentication required",
+                      "error": "Unauthorized"
+                    }
+                  },
+                  "invalidToken": {
+                    "summary": "Invalid token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Invalid access token",
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my groups",
+        "tags": [
+          "me"
         ]
       }
     }
@@ -399,6 +548,17 @@
             "type": "string",
             "example": "jane.doe@example.com"
           },
+          "provider": {
+            "type": "object",
+            "description": "External identity provider, null for local accounts.",
+            "example": null,
+            "nullable": true
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "description": "Whether the user email address is verified.",
+            "example": false
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string",
@@ -418,6 +578,8 @@
           "lastname",
           "firstname",
           "email",
+          "provider",
+          "emailVerified",
           "createdAt",
           "lastLogin"
         ]
@@ -505,6 +667,19 @@
           "expiresIn"
         ]
       },
+      "GoogleLoginRequestDto": {
+        "type": "object",
+        "properties": {
+          "idToken": {
+            "type": "string",
+            "description": "Google ID token returned by Google Sign-In.",
+            "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."
+          }
+        },
+        "required": [
+          "idToken"
+        ]
+      },
       "CreateGroupRequestDto": {
         "type": "object",
         "properties": {
@@ -549,6 +724,55 @@
           "name",
           "createdBy",
           "createdAt"
+        ]
+      },
+      "MeGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique group identifier.",
+            "example": "a590d72e-4a13-4a68-8e73-1f8c2c905f53"
+          },
+          "name": {
+            "type": "string",
+            "description": "Group name.",
+            "example": "Family dinners"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Identifier of the user who created the group.",
+            "example": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Group creation date and time.",
+            "example": "2026-07-20T10:15:30.000Z"
+          },
+          "membersCount": {
+            "type": "number",
+            "description": "Number of active members in the group.",
+            "example": 2,
+            "minimum": 1
+          },
+          "role": {
+            "type": "string",
+            "description": "Role of the authenticated user in the group.",
+            "enum": [
+              "admin",
+              "member"
+            ],
+            "example": "admin"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdBy",
+          "createdAt",
+          "membersCount",
+          "role"
         ]
       }
     }
