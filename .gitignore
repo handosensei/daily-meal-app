@@ -8,6 +8,7 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+coverage/
 
 # Native
 .kotlin/
@@ -43,3 +44,5 @@ example
 /android
 
 .idea
+
+.env

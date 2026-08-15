@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 type LoginRequest = {
   email: string;
   password: string;
@@ -29,10 +27,6 @@ function getApiBaseUrl() {
 
   if (configuredUrl) {
     return configuredUrl.replace(/\/$/, '');
-  }
-
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.origin) {
-    return window.location.origin.replace(/\/$/, '');
   }
 
   return DEFAULT_API_BASE_URL;
