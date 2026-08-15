@@ -71,12 +71,13 @@ jest.mock('expo-router/unstable-native-tabs', () => {
     return React.createElement(View, { testID: 'native-tabs', ...props }, children);
   }
 
-  NativeTabs.Trigger = ({ children, name }: { children: React.ReactNode; name: string }) =>
+  const Trigger = ({ children, name }: { children: React.ReactNode; name: string }) =>
     React.createElement(View, { testID: `native-tab-${name}` }, children);
-  NativeTabs.Trigger.Label = ({ children }: { children: React.ReactNode }) =>
+  Trigger.Label = ({ children }: { children: React.ReactNode }) =>
     React.createElement(Text, null, children);
-  NativeTabs.Trigger.Icon = (props: Record<string, unknown>) =>
+  Trigger.Icon = (props: Record<string, unknown>) =>
     React.createElement(View, { testID: 'native-tab-icon', ...props });
+  NativeTabs.Trigger = Trigger;
 
   return { NativeTabs };
 });
@@ -122,7 +123,9 @@ jest.mock('react-native-reanimated', () => {
 });
 
 jest.mock('react-native-worklets', () => ({
-  scheduleOnRN: jest.fn((callback: () => void, ...args: unknown[]) => callback(...args)),
+  scheduleOnRN: jest.fn((callback: (...args: unknown[]) => void, ...args: unknown[]) =>
+    callback(...args),
+  ),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
