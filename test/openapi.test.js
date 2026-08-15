@@ -1,6 +1,5 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
-const test = require('node:test');
 
 const contract = JSON.parse(readFileSync('public/swagger/openapi.json', 'utf8'));
 
