@@ -11,6 +11,7 @@ export function ExternalLink({ href, ...rest }: Props) {
       {...rest}
       href={href}
       onPress={async (event) => {
+        // istanbul ignore next: Expo inlines EXPO_OS in the Jest transform.
         if (process.env.EXPO_OS !== 'web') {
           // Prevent the default behavior of linking to the default browser on native.
           event.preventDefault();

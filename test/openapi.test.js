@@ -8,7 +8,7 @@ test('OpenAPI contract exposes the required Swagger metadata', () => {
   assert.equal(contract.openapi, '3.0.0');
   assert.equal(contract.info.title, 'Daily Meal API');
   assert.match(contract.info.version, /^\d+\.\d+\.\d+$/);
-  assert.ok(Array.isArray(contract.servers));
+  assert.equal(Array.isArray(contract.servers), true);
   assert.equal(typeof contract.paths, 'object');
   assert.equal(
     contract.paths['/groups'].post.responses['201'].description,
@@ -21,8 +21,5 @@ test('OpenAPI contract defines reusable frontend error schema', () => {
 
   assert.deepEqual(apiError.required, ['statusCode', 'message', 'error']);
   assert.equal(apiError.properties.statusCode.example, 400);
-  assert.equal(
-    contract.components.securitySchemes.bearer.scheme,
-    'bearer',
-  );
+  assert.equal(contract.components.securitySchemes.bearer.scheme, 'bearer');
 });
