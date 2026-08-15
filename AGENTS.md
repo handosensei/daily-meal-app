@@ -2,6 +2,11 @@
 
 Tout developpement frontend doit respecter les bonnes pratiques de securite, de maintenabilite, d'accessibilite et les normes UI du projet.
 
+Toute fonctionnalite ou correction demandee doit contenir :
+
+- des tests unitaires ;
+- des tests fonctionnels, comme Cypress.
+
 ## Design system
 
 Le fichier `DESIGN.md` est la source de verite du design system DailyMeal pour le frontend.
