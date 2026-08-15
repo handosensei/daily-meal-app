@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 import {
   InvalidCredentialsError,
   loginWithGoogle,
@@ -8,8 +6,6 @@ import {
 
 const originalFetch = global.fetch;
 const originalEnv = process.env.EXPO_PUBLIC_API_BASE_URL;
-const originalWindow = global.window;
-const originalPlatform = Platform.OS;
 
 function mockFetch(status: number, body = { accessToken: 'token', tokenType: 'Bearer', expiresIn: 3600 }) {
   const fetchMock = jest.fn(() =>
@@ -24,15 +20,9 @@ function mockFetch(status: number, body = { accessToken: 'token', tokenType: 'Be
   return fetchMock;
 }
 
-function setPlatform(os: typeof Platform.OS) {
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
-}
-
 afterEach(() => {
   global.fetch = originalFetch;
   process.env.EXPO_PUBLIC_API_BASE_URL = originalEnv;
-  global.window = originalWindow;
-  setPlatform(originalPlatform);
   jest.clearAllMocks();
 });
 
@@ -54,18 +44,14 @@ test('posts password credentials to the configured API base URL', async () => {
   });
 });
 
-test('posts Google ID tokens with the web origin when no API URL is configured', async () => {
+test('posts Google ID tokens to the default API base URL when no API URL is configured', async () => {
   delete process.env.EXPO_PUBLIC_API_BASE_URL;
-  setPlatform('web');
-  global.window = {
-    location: { origin: 'https://app.dailymeal.test/' },
-  } as Window & typeof globalThis;
   const fetchMock = mockFetch(200);
 
   await loginWithGoogle({ idToken: 'id-token' });
 
   expect(fetchMock).toHaveBeenCalledWith(
-    'https://app.dailymeal.test/auth/google',
+    'http://localhost:3000/auth/google',
     expect.objectContaining({
       body: JSON.stringify({ idToken: 'id-token' }),
     }),
