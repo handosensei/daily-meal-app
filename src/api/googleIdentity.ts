@@ -8,6 +8,7 @@ WebBrowser.maybeCompleteAuthSession();
 type GoogleAuthExtra = {
   iosClientId?: string;
   androidClientId?: string;
+  iosUrlScheme?: string;
 };
 
 const GOOGLE_DISCOVERY = {
@@ -52,11 +53,39 @@ function getConfiguredScheme() {
   return Array.isArray(scheme) ? scheme[0] : scheme;
 }
 
-function getRedirectUri() {
+function getIosGoogleUrlScheme(clientId: string) {
+  const iosUrlScheme = getGoogleAuthExtra().iosUrlScheme?.trim();
+
+  if (iosUrlScheme) {
+    return iosUrlScheme;
+  }
+
+  const googleClientSuffix = '.apps.googleusercontent.com';
+
+  if (!clientId.endsWith(googleClientSuffix)) {
+    return undefined;
+  }
+
+  return `com.googleusercontent.apps.${clientId.slice(0, -googleClientSuffix.length)}`;
+}
+
+function getNativeRedirectUri(clientId: string) {
+  if (Platform.OS === 'ios') {
+    const googleUrlScheme = getIosGoogleUrlScheme(clientId);
+
+    if (googleUrlScheme) {
+      return `${googleUrlScheme}:/oauthredirect`;
+    }
+  }
+
   const nativeApplicationId = getNativeApplicationId();
 
+  return nativeApplicationId ? `${nativeApplicationId}:/oauthredirect` : undefined;
+}
+
+function getRedirectUri(clientId: string) {
   return AuthSession.makeRedirectUri({
-    native: nativeApplicationId ? `${nativeApplicationId}:/oauthredirect` : undefined,
+    native: getNativeRedirectUri(clientId),
     scheme: getConfiguredScheme(),
   });
 }
@@ -68,7 +97,7 @@ export async function requestGoogleIdToken(): Promise<string> {
     throw new Error('Google client is not configured');
   }
 
-  const redirectUri = getRedirectUri();
+  const redirectUri = getRedirectUri(clientId);
   const request = new AuthSession.AuthRequest({
     clientId,
     redirectUri,
