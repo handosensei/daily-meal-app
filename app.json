@@ -5,7 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dailymealapp",
+    "scheme": [
+      "dailymealapp",
+      "com.googleusercontent.apps.815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5"
+    ],
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",

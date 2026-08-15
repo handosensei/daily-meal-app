@@ -9,6 +9,7 @@ type MockOptions = {
   extraGoogleAuth?: {
     iosClientId?: string;
     androidClientId?: string;
+    iosUrlScheme?: string;
   } | null;
   platform?: 'ios' | 'android' | 'web';
   scheme?: string | string[];
@@ -20,7 +21,7 @@ function loadGoogleIdentity({
   codeVerifier = 'pkce-code-verifier',
   exchangeResult = { idToken: 'exchanged-id-token' },
   extraGoogleAuth = {
-    iosClientId: 'ios-client-id',
+    iosClientId: '815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5.apps.googleusercontent.com',
     androidClientId: 'android-client-id',
   },
   platform = 'ios',
@@ -36,7 +37,7 @@ function loadGoogleIdentity({
     promptAsync,
   }));
   const exchangeCodeAsync = jest.fn().mockResolvedValue(exchangeResult);
-  const makeRedirectUri = jest.fn().mockReturnValue('com.dailymeal.app:/oauthredirect');
+  const makeRedirectUri = jest.fn(({ native }) => native ?? 'dailymealapp://');
   const maybeCompleteAuthSession = jest.fn();
 
   jest.doMock('expo-auth-session', () => ({
@@ -110,25 +111,64 @@ test('native Google identity exchanges an authorization code for an ID token', a
 
   expect(maybeCompleteAuthSession).toHaveBeenCalledTimes(1);
   expect(makeRedirectUri).toHaveBeenCalledWith({
-    native: 'com.dailymeal.app:/oauthredirect',
+    native:
+      'com.googleusercontent.apps.815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5:/oauthredirect',
     scheme: 'dailymealapp',
   });
   expect(authRequest).toHaveBeenCalledWith(
     expect.objectContaining({
-      clientId: 'ios-client-id',
-      redirectUri: 'com.dailymeal.app:/oauthredirect',
+      clientId: '815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5.apps.googleusercontent.com',
+      redirectUri:
+        'com.googleusercontent.apps.815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5:/oauthredirect',
       responseType: 'code',
     }),
   );
   expect(exchangeCodeAsync).toHaveBeenCalledWith(
     expect.objectContaining({
-      clientId: 'ios-client-id',
+      clientId: '815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5.apps.googleusercontent.com',
       code: 'auth-code',
       extraParams: { code_verifier: 'pkce-code-verifier' },
-      redirectUri: 'com.dailymeal.app:/oauthredirect',
+      redirectUri:
+        'com.googleusercontent.apps.815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5:/oauthredirect',
     }),
     expect.objectContaining({
       tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    }),
+  );
+});
+
+test('native Google identity derives the iOS redirect scheme from a Google client ID', async () => {
+  const { makeRedirectUri, requestGoogleIdToken } = loadGoogleIdentity({
+    extraGoogleAuth: {
+      iosClientId: '815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5.apps.googleusercontent.com',
+      androidClientId: 'android-client-id',
+    },
+  });
+
+  await requestGoogleIdToken();
+
+  expect(makeRedirectUri).toHaveBeenCalledWith(
+    expect.objectContaining({
+      native:
+        'com.googleusercontent.apps.815087372707-mrcco5d3hjdng93ulcmleoocgs0p70r5:/oauthredirect',
+    }),
+  );
+});
+
+test('native Google identity allows overriding the iOS redirect scheme', async () => {
+  const { makeRedirectUri, requestGoogleIdToken } = loadGoogleIdentity({
+    extraGoogleAuth: {
+      iosClientId: 'ios-client-id',
+      androidClientId: 'android-client-id',
+      iosUrlScheme: 'com.googleusercontent.apps.custom',
+    },
+  });
+
+  await requestGoogleIdToken();
+
+  expect(makeRedirectUri).toHaveBeenCalledWith(
+    expect.objectContaining({
+      native: 'com.googleusercontent.apps.custom:/oauthredirect',
     }),
   );
 });
@@ -156,6 +196,7 @@ test('native Google identity supports Expo config scheme arrays', async () => {
 test('native Google identity can build a redirect URI without a native app identifier', async () => {
   const { makeRedirectUri, requestGoogleIdToken } = loadGoogleIdentity({
     iosBundleIdentifier: null,
+    extraGoogleAuth: { iosClientId: 'ios-client-id', androidClientId: 'android-client-id' },
   });
 
   await requestGoogleIdToken();
