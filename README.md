@@ -31,6 +31,22 @@ npm run lint
 npm run test
 ```
 
+## Qualite et CI
+
+La CI GitHub Actions s'execute sur chaque pull request et sur `main`.
+Elle installe les dependances avec `npm ci`, puis valide :
+
+```bash
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run build:web
+npm run test:functional
+```
+
+`npm run test:functional` verifie les routes publiques de l'export web Expo,
+dans un esprit Cypress-like sans dependance supplementaire.
+
 ## Documentation API
 
 Le contrat Swagger/OpenAPI est disponible dans
