@@ -25,3 +25,24 @@ test('OpenAPI contract documents Google ID token login for the frontend', () => 
   expect(requestSchema.required).toEqual(['idToken']);
   expect(responseSchemaRef).toBe('#/components/schemas/LoginResponseDto');
 });
+
+test('OpenAPI contract documents user registration for the frontend', () => {
+  const endpoint = contract.paths['/users'].post;
+  const requestSchemaRef = endpoint.requestBody.content['application/json'].schema.$ref;
+  const requestSchema = contract.components.schemas.CreateUserRequestDto;
+  const responseSchemaRef = endpoint.responses['201'].content['application/json'].schema.$ref;
+  const duplicateEmail = endpoint.responses['409'].content['application/json'].example;
+
+  expect(endpoint.operationId).toBe('UsersController_create');
+  expect(requestSchemaRef).toBe('#/components/schemas/CreateUserRequestDto');
+  expect(requestSchema.required).toEqual([
+    'lastname',
+    'firstname',
+    'email',
+    'password',
+    'passwordConfirmation',
+  ]);
+  expect(requestSchema.properties.password.minLength).toBe(8);
+  expect(responseSchemaRef).toBe('#/components/schemas/PublicUserDto');
+  expect(duplicateEmail.message).toBe('A user with this email already exists');
+});
