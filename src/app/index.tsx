@@ -11,19 +11,38 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { InvalidCredentialsError, loginWithGoogle, loginWithPassword } from '@/api/auth';
+import {
+  EmailAlreadyExistsError,
+  InvalidCredentialsError,
+  loginWithGoogle,
+  loginWithPassword,
+  registerUser,
+} from '@/api/auth';
 import { requestGoogleIdToken } from '@/api/googleIdentity';
 import { ThemedText } from '@/components/themed-text';
 
 const INVALID_CREDENTIALS_MESSAGE = "L'email ou le mot de passe est incorrect.";
+const PASSWORD_HELPER = 'Au moins 8 caractères.';
+
+type ScreenMode = 'login' | 'signup' | 'groups';
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
 export default function LoginScreen() {
+  const [screenMode, setScreenMode] = useState<ScreenMode>('login');
   const [email, setEmail] = useState('sam@foyer.fr');
   const [password, setPassword] = useState('password');
+  const [lastname, setLastname] = useState('');
+  const [firstname, setFirstname] = useState('Sam');
+  const [signupEmail, setSignupEmail] = useState('sam@foyer.fr');
+  const [signupPassword, setSignupPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [signupErrorMessage, setSignupErrorMessage] = useState('');
   const [isSubmittingPassword, setSubmittingPassword] = useState(false);
   const [isSubmittingGoogle, setSubmittingGoogle] = useState(false);
-  const [isConnected, setConnected] = useState(false);
+  const [isSubmittingSignup, setSubmittingSignup] = useState(false);
 
   async function submitPasswordLogin() {
     setErrorMessage('');
@@ -31,7 +50,7 @@ export default function LoginScreen() {
 
     try {
       await loginWithPassword({ email: email.trim(), password });
-      setConnected(true);
+      setScreenMode('groups');
     } catch (error) {
       setErrorMessage(
         error instanceof InvalidCredentialsError
@@ -50,7 +69,7 @@ export default function LoginScreen() {
     try {
       const idToken = await requestGoogleIdToken();
       await loginWithGoogle({ idToken });
-      setConnected(true);
+      setScreenMode('groups');
     } catch {
       setErrorMessage('Connexion Google impossible pour le moment.');
     } finally {
@@ -58,13 +77,217 @@ export default function LoginScreen() {
     }
   }
 
-  if (isConnected) {
+  function validateSignupForm() {
+    const trimmedLastname = lastname.trim();
+    const trimmedFirstname = firstname.trim();
+    const trimmedEmail = signupEmail.trim();
+
+    if (trimmedLastname.length < 3) {
+      return 'Le nom doit contenir au moins 3 caractères.';
+    }
+
+    if (trimmedFirstname.length < 3) {
+      return 'Le prénom doit contenir au moins 3 caractères.';
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      return 'Saisissez une adresse e-mail valide.';
+    }
+
+    if (signupPassword.length < 8) {
+      return 'Le mot de passe doit contenir au moins 8 caractères.';
+    }
+
+    return '';
+  }
+
+  async function submitSignup() {
+    const validationMessage = validateSignupForm();
+    setSignupErrorMessage(validationMessage);
+
+    if (validationMessage) {
+      return;
+    }
+
+    setSubmittingSignup(true);
+
+    try {
+      await registerUser({
+        lastname: lastname.trim(),
+        firstname: firstname.trim(),
+        email: signupEmail.trim(),
+        password: signupPassword,
+      });
+      setScreenMode('groups');
+    } catch (error) {
+      setSignupErrorMessage(
+        error instanceof EmailAlreadyExistsError
+          ? 'Cette adresse e-mail est déjà utilisée.'
+          : "Inscription impossible pour le moment.",
+      );
+    } finally {
+      setSubmittingSignup(false);
+    }
+  }
+
+  if (screenMode === 'groups') {
     return (
       <SafeAreaView style={styles.connectedContainer}>
         <View style={styles.connectedPanel}>
           <BrandMark />
-          <ThemedText style={styles.connectedTitle}>Vous êtes connecté.</ThemedText>
+          <ThemedText accessibilityRole="header" style={styles.connectedTitle}>
+            Mes groupes
+          </ThemedText>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screenMode === 'signup') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.select({ ios: 'padding', default: undefined })}
+          style={styles.keyboardView}>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            <View style={styles.signupCard}>
+              <View style={styles.stepBadgeRow}>
+                <View style={styles.stepBadge}>
+                  <ThemedText style={styles.stepBadgeText}>1b</ThemedText>
+                </View>
+                <ThemedText style={styles.stepTitle}>Inscription</ThemedText>
+              </View>
+
+              <View style={styles.phoneSheet}>
+                <View
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  style={styles.phoneHandle}
+                />
+                <View style={styles.signupHeaderRow}>
+                  <Pressable
+                    accessibilityLabel="Retour à la connexion"
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() => {
+                      setSignupErrorMessage('');
+                      setScreenMode('login');
+                    }}
+                    style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+                    <ThemedText style={styles.backButtonText}>‹</ThemedText>
+                  </Pressable>
+                  <ThemedText style={styles.signupHeaderTitle}>Créer un compte</ThemedText>
+                </View>
+
+                <ThemedText accessibilityRole="header" style={styles.signupTitle}>
+                  On fait connaissance ?
+                </ThemedText>
+                <ThemedText style={styles.signupSubtitle}>
+                  Quelques infos et on vous installe à table.
+                </ThemedText>
+
+                <View style={styles.signupForm}>
+                  <View style={styles.fieldGroup}>
+                    <ThemedText style={styles.label}>Nom</ThemedText>
+                    <TextInput
+                      accessibilityLabel="Nom"
+                      autoComplete="family-name"
+                      onChangeText={setLastname}
+                      placeholder="Dupont"
+                      placeholderTextColor="#7E7378"
+                      style={styles.input}
+                      textContentType="familyName"
+                      value={lastname}
+                    />
+                  </View>
+
+                  <View style={styles.fieldGroup}>
+                    <ThemedText style={styles.label}>Prénom</ThemedText>
+                    <TextInput
+                      accessibilityLabel="Prénom"
+                      autoComplete="given-name"
+                      onChangeText={setFirstname}
+                      placeholder="Sam"
+                      placeholderTextColor="#7E7378"
+                      style={styles.input}
+                      textContentType="givenName"
+                      value={firstname}
+                    />
+                  </View>
+
+                  <View style={styles.fieldGroup}>
+                    <ThemedText style={styles.label}>E-mail</ThemedText>
+                    <TextInput
+                      accessibilityLabel="E-mail d'inscription"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      inputMode="email"
+                      keyboardType="email-address"
+                      onChangeText={setSignupEmail}
+                      placeholder="sam@foyer.fr"
+                      placeholderTextColor="#7E7378"
+                      style={styles.input}
+                      textContentType="emailAddress"
+                      value={signupEmail}
+                    />
+                  </View>
+
+                  <View style={styles.fieldGroup}>
+                    <ThemedText style={styles.label}>Mot de passe</ThemedText>
+                    <TextInput
+                      accessibilityLabel="Mot de passe d'inscription"
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      onChangeText={setSignupPassword}
+                      placeholder={PASSWORD_HELPER}
+                      placeholderTextColor="#7E7378"
+                      secureTextEntry
+                      style={styles.input}
+                      textContentType="newPassword"
+                      value={signupPassword}
+                    />
+                  </View>
+
+                  {signupErrorMessage ? (
+                    <ThemedText accessibilityLiveRegion="polite" style={styles.errorText}>
+                      {signupErrorMessage}
+                    </ThemedText>
+                  ) : null}
+
+                  <View style={styles.infoBox}>
+                    <View style={styles.infoIcon}>
+                      <ThemedText style={styles.infoIconText}>›</ThemedText>
+                    </View>
+                    <ThemedText style={styles.infoText}>
+                      <ThemedText style={styles.infoStrong}>Ensuite : </ThemedText>
+                      on crée un groupe, ou on rejoint le vôtre avec un code.
+                    </ThemedText>
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isSubmittingSignup}
+                    onPress={submitSignup}
+                    style={({ pressed }) => [
+                      styles.primaryButton,
+                      styles.signupPrimaryButton,
+                      pressed && styles.pressed,
+                      isSubmittingSignup && styles.disabledButton,
+                    ]}>
+                    {isSubmittingSignup ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <ThemedText style={styles.primaryButtonText}>Continuer</ThemedText>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -161,7 +384,13 @@ export default function LoginScreen() {
 
               <View style={styles.signupRow}>
                 <ThemedText style={styles.signupText}>Pas encore de compte ? </ThemedText>
-                <Pressable accessibilityRole="link" hitSlop={8}>
+                <Pressable
+                  accessibilityRole="link"
+                  hitSlop={8}
+                  onPress={() => {
+                    setErrorMessage('');
+                    setScreenMode('signup');
+                  }}>
                   <ThemedText style={styles.signupLink}>{"S'inscrire"}</ThemedText>
                 </Pressable>
               </View>
@@ -218,6 +447,102 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 28,
     elevation: 6,
+  },
+  signupCard: {
+    width: '100%',
+    maxWidth: 390,
+  },
+  stepBadgeRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 9,
+    marginBottom: 17,
+    paddingHorizontal: 5,
+  },
+  stepBadge: {
+    minWidth: 26,
+    minHeight: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: '#FFF3F6',
+  },
+  stepBadgeText: {
+    color: '#70263F',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 14,
+  },
+  stepTitle: {
+    color: '#352A2F',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  phoneSheet: {
+    width: '100%',
+    minHeight: 638,
+    borderRadius: 38,
+    borderWidth: 1,
+    borderColor: '#D8CED2',
+    backgroundColor: '#FFFCFC',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 32,
+    shadowColor: '#2E2026',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+  phoneHandle: {
+    alignSelf: 'center',
+    width: 94,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#C9BCC1',
+    marginBottom: 28,
+  },
+  signupHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  backButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonText: {
+    color: '#352A2F',
+    fontSize: 30,
+    fontWeight: '400',
+    lineHeight: 31,
+  },
+  signupHeaderTitle: {
+    color: '#2E2529',
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 23,
+  },
+  signupTitle: {
+    color: '#2E2529',
+    fontSize: 23,
+    fontWeight: '800',
+    lineHeight: 29,
+    marginTop: 18,
+  },
+  signupSubtitle: {
+    color: '#6E6268',
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  signupForm: {
+    marginTop: 21,
+    gap: 13,
   },
   brand: {
     alignItems: 'center',
@@ -277,6 +602,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 20,
   },
+  infoBox: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 11,
+    borderRadius: 12,
+    backgroundColor: '#EEF7F8',
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+  },
+  infoIcon: {
+    width: 17,
+    height: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: '#244455',
+  },
+  infoIconText: {
+    color: '#244455',
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 16,
+  },
+  infoText: {
+    flex: 1,
+    color: '#244455',
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 17,
+  },
+  infoStrong: {
+    color: '#244455',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 17,
+  },
   primaryButton: {
     minHeight: 51,
     alignItems: 'center',
@@ -284,6 +646,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#A83E60',
     marginTop: 2,
+  },
+  signupPrimaryButton: {
+    marginTop: 6,
   },
   primaryButtonText: {
     color: '#FFFFFF',
@@ -365,9 +730,9 @@ const styles = StyleSheet.create({
   },
   connectedTitle: {
     color: '#2E2529',
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '800',
-    lineHeight: 28,
+    lineHeight: 32,
     marginTop: 28,
     textAlign: 'center',
   },

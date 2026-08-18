@@ -3,6 +3,13 @@ type LoginRequest = {
   password: string;
 };
 
+type RegisterRequest = {
+  lastname: string;
+  firstname: string;
+  email: string;
+  password: string;
+};
+
 type GoogleLoginRequest = {
   idToken: string;
 };
@@ -20,6 +27,13 @@ export class InvalidCredentialsError extends Error {
   }
 }
 
+export class EmailAlreadyExistsError extends Error {
+  constructor() {
+    super('A user with this email already exists');
+    this.name = 'EmailAlreadyExistsError';
+  }
+}
+
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 
 function getApiBaseUrl() {
@@ -32,7 +46,10 @@ function getApiBaseUrl() {
   return DEFAULT_API_BASE_URL;
 }
 
-async function postAuthRequest<TPayload>(path: '/auth/login' | '/auth/google', payload: TPayload) {
+async function postJsonRequest<TResponse, TPayload>(
+  path: '/auth/login' | '/auth/google' | '/users',
+  payload: TPayload,
+) {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method: 'POST',
     headers: {
@@ -46,17 +63,28 @@ async function postAuthRequest<TPayload>(path: '/auth/login' | '/auth/google', p
     throw new InvalidCredentialsError();
   }
 
+  if (response.status === 409) {
+    throw new EmailAlreadyExistsError();
+  }
+
   if (!response.ok) {
     throw new Error('Unable to sign in');
   }
 
-  return (await response.json()) as LoginResponse;
+  return (await response.json()) as TResponse;
 }
 
 export function loginWithPassword(credentials: LoginRequest) {
-  return postAuthRequest('/auth/login', credentials);
+  return postJsonRequest<LoginResponse, LoginRequest>('/auth/login', credentials);
 }
 
 export function loginWithGoogle(payload: GoogleLoginRequest) {
-  return postAuthRequest('/auth/google', payload);
+  return postJsonRequest<LoginResponse, GoogleLoginRequest>('/auth/google', payload);
+}
+
+export function registerUser(payload: RegisterRequest) {
+  return postJsonRequest('/users', {
+    ...payload,
+    passwordConfirmation: payload.password,
+  });
 }

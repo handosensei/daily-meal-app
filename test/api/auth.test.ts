@@ -1,7 +1,9 @@
 import {
+  EmailAlreadyExistsError,
   InvalidCredentialsError,
   loginWithGoogle,
   loginWithPassword,
+  registerUser,
 } from '@/api/auth';
 
 const originalFetch = global.fetch;
@@ -58,6 +60,42 @@ test('posts Google ID tokens to the default API base URL when no API URL is conf
   );
 });
 
+test('posts registration details with password confirmation', async () => {
+  process.env.EXPO_PUBLIC_API_BASE_URL = 'https://api.dailymeal.test';
+  const fetchMock = mockFetch(201, {
+    id: 'user-id',
+    lastname: 'Dupont',
+    firstname: 'Sam',
+    email: 'sam@foyer.fr',
+    provider: null,
+    emailVerified: false,
+    createdAt: '2026-08-18T10:00:00.000Z',
+    lastLogin: null,
+  });
+
+  await registerUser({
+    lastname: 'Dupont',
+    firstname: 'Sam',
+    email: 'sam@foyer.fr',
+    password: 'password',
+  });
+
+  expect(fetchMock).toHaveBeenCalledWith('https://api.dailymeal.test/users', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      lastname: 'Dupont',
+      firstname: 'Sam',
+      email: 'sam@foyer.fr',
+      password: 'password',
+      passwordConfirmation: 'password',
+    }),
+  });
+});
+
 test.each([400, 401])('maps status %i to invalid credentials', async (status) => {
   delete process.env.EXPO_PUBLIC_API_BASE_URL;
   mockFetch(status);
@@ -65,6 +103,19 @@ test.each([400, 401])('maps status %i to invalid credentials', async (status) =>
   await expect(loginWithPassword({ email: 'bad', password: 'bad' })).rejects.toBeInstanceOf(
     InvalidCredentialsError,
   );
+});
+
+test('maps duplicate registration emails to a dedicated error', async () => {
+  mockFetch(409);
+
+  await expect(
+    registerUser({
+      lastname: 'Dupont',
+      firstname: 'Sam',
+      email: 'sam@foyer.fr',
+      password: 'password',
+    }),
+  ).rejects.toBeInstanceOf(EmailAlreadyExistsError);
 });
 
 test('maps other failed responses to a generic sign-in error', async () => {
