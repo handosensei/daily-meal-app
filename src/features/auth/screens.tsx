@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -19,8 +19,10 @@ import {
   loginWithPassword,
   registerUser,
 } from '@/api/auth';
+import { GroupsAuthenticationError, listMyGroups, type MeGroupResponse } from '@/api/groups';
 import { requestGoogleIdToken } from '@/api/googleIdentity';
 import { ThemedText } from '@/components/themed-text';
+import { getAuthSession, setAuthSession } from '@/features/auth/session';
 
 const INVALID_CREDENTIALS_MESSAGE = "L'email ou le mot de passe est incorrect.";
 const PASSWORD_HELPER = 'Au moins 8 caractères.';
@@ -53,6 +55,7 @@ export function LoginScreen() {
 
     try {
       const loginResponse = await loginWithPassword({ email: email.trim(), password });
+      setAuthSession(loginResponse);
       router.replace(getGroupsRoute(loginResponse.emailVerified === true));
     } catch (error) {
       setErrorMessage(
@@ -72,6 +75,7 @@ export function LoginScreen() {
     try {
       const idToken = await requestGoogleIdToken();
       const loginResponse = await loginWithGoogle({ idToken });
+      setAuthSession(loginResponse);
       router.replace(getGroupsRoute(loginResponse.emailVerified === true));
     } catch {
       setErrorMessage('Connexion Google impossible pour le moment.');
@@ -402,29 +406,141 @@ export function SignupScreen() {
 
 export function GroupsScreen() {
   const { emailVerified } = useLocalSearchParams<{ emailVerified?: string }>();
-  const canCreateOrJoinGroup = emailVerified === 'true';
+  const authSession = getAuthSession();
+  const canCreateOrJoinGroup = emailVerified === 'true' || authSession?.emailVerified === true;
+  const [groups, setGroups] = useState<MeGroupResponse[]>([]);
+  const [isLoadingGroups, setLoadingGroups] = useState(true);
+  const [groupsErrorMessage, setGroupsErrorMessage] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGroups() {
+      if (!authSession) {
+        setLoadingGroups(false);
+        setGroupsErrorMessage('Connectez-vous pour afficher vos groupes.');
+        return;
+      }
+
+      setLoadingGroups(true);
+      setGroupsErrorMessage('');
+
+      try {
+        const loadedGroups = await listMyGroups(authSession.accessToken);
+
+        if (isMounted) {
+          setGroups(loadedGroups);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setGroupsErrorMessage(
+            error instanceof GroupsAuthenticationError
+              ? 'Votre session a expiré. Connectez-vous à nouveau.'
+              : 'Impossible de charger vos groupes pour le moment.',
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingGroups(false);
+        }
+      }
+    }
+
+    loadGroups();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authSession]);
 
   return (
     <SafeAreaView style={styles.connectedContainer}>
-      <View style={styles.connectedPanel}>
-        <BrandMark />
-        <ThemedText accessibilityRole="header" style={styles.connectedTitle}>
-          Mes groupes
-        </ThemedText>
-        {canCreateOrJoinGroup ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => undefined}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              styles.connectedPrimaryButton,
-              pressed && styles.pressed,
-            ]}>
-            <ThemedText style={styles.primaryButtonText}>Créer ou rejoindre un groupe</ThemedText>
-          </Pressable>
-        ) : null}
-      </View>
+      <ScrollView contentContainerStyle={styles.connectedContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.connectedPanel}>
+          <BrandMark />
+          <ThemedText accessibilityRole="header" style={styles.connectedTitle}>
+            Mes groupes
+          </ThemedText>
+          <ThemedText style={styles.connectedSubtitle}>
+            {"Choisissez celui qu'on planifie aujourd'hui."}
+          </ThemedText>
+
+          {isLoadingGroups ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ActivityIndicator color="#A83E60" />
+              <ThemedText style={styles.groupsStateText}>Chargement de vos groupes...</ThemedText>
+            </View>
+          ) : null}
+
+          {!isLoadingGroups && groupsErrorMessage ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ThemedText style={styles.errorText}>{groupsErrorMessage}</ThemedText>
+            </View>
+          ) : null}
+
+          {!isLoadingGroups && !groupsErrorMessage && groups.length === 0 ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ThemedText style={styles.groupsStateText}>
+                {"Vous n'appartenez à aucun groupe pour le moment."}
+              </ThemedText>
+            </View>
+          ) : null}
+
+          {!isLoadingGroups && !groupsErrorMessage && groups.length > 0 ? (
+            <View style={styles.groupList}>
+              {groups.map((group) => (
+                <GroupCard group={group} key={group.id} />
+              ))}
+            </View>
+          ) : null}
+
+          {canCreateOrJoinGroup ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => undefined}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                styles.connectedPrimaryButton,
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText style={styles.primaryButtonText}>Créer ou rejoindre un groupe</ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
+      </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function GroupCard({ group }: { group: MeGroupResponse }) {
+  const roleLabel = group.role === 'admin' ? 'Responsable' : 'Membre';
+  const membersLabel = `${group.membersCount} ${group.membersCount > 1 ? 'membres' : 'membre'}`;
+
+  return (
+    <Pressable
+      accessibilityLabel={`${group.name}, ${roleLabel}, ${membersLabel}`}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.groupCard, pressed && styles.pressed]}>
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.groupAvatar}>
+        <ThemedText style={styles.groupAvatarText}>{group.name.charAt(0).toUpperCase()}</ThemedText>
+      </View>
+      <View style={styles.groupDetails}>
+        <View style={styles.groupTitleRow}>
+          <ThemedText numberOfLines={2} style={styles.groupName}>
+            {group.name}
+          </ThemedText>
+          <View style={[styles.roleBadge, group.role === 'admin' && styles.adminRoleBadge]}>
+            <ThemedText style={[styles.roleBadgeText, group.role === 'admin' && styles.adminRoleBadgeText]}>
+              {roleLabel}
+            </ThemedText>
+          </View>
+        </View>
+        <ThemedText style={styles.groupMeta}>{membersLabel}</ThemedText>
+      </View>
+      <ThemedText accessibilityElementsHidden importantForAccessibility="no" style={styles.groupChevron}>
+        ›
+      </ThemedText>
+    </Pressable>
   );
 }
 
@@ -740,15 +856,18 @@ const styles = StyleSheet.create({
   },
   connectedContainer: {
     flex: 1,
+    backgroundColor: '#F4EFEF',
+  },
+  connectedContent: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F4EFEF',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   connectedPanel: {
     width: '100%',
     maxWidth: 390,
-    alignItems: 'center',
     borderRadius: 24,
     backgroundColor: '#FFFCFC',
     paddingHorizontal: 24,
@@ -762,8 +881,112 @@ const styles = StyleSheet.create({
     marginTop: 28,
     textAlign: 'center',
   },
+  connectedSubtitle: {
+    color: '#6E6268',
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 22,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  groupsStateBox: {
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 12,
+    backgroundColor: '#F6F1F2',
+    marginTop: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  groupsStateText: {
+    color: '#574B51',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  groupList: {
+    gap: 12,
+    marginTop: 24,
+  },
+  groupCard: {
+    minHeight: 92,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2D6DA',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    shadowColor: '#2E2026',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  groupAvatar: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#EAE1E4',
+  },
+  groupAvatarText: {
+    color: '#574B51',
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  groupDetails: {
+    flex: 1,
+    gap: 8,
+  },
+  groupTitleRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  groupName: {
+    flex: 1,
+    color: '#2E2529',
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  roleBadge: {
+    borderRadius: 999,
+    backgroundColor: '#E8E1E4',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  adminRoleBadge: {
+    backgroundColor: '#FFF3F6',
+  },
+  roleBadgeText: {
+    color: '#4D4448',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 14,
+  },
+  adminRoleBadgeText: {
+    color: '#70263F',
+  },
+  groupMeta: {
+    color: '#6E6268',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  groupChevron: {
+    color: '#766B70',
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 30,
+  },
   connectedPrimaryButton: {
-    alignSelf: 'stretch',
     marginTop: 28,
   },
 });

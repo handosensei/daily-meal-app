@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '@/api/config';
+
 type LoginRequest = {
   email: string;
   password: string;
@@ -44,18 +46,6 @@ export class EmailAlreadyExistsError extends Error {
     super('A user with this email already exists');
     this.name = 'EmailAlreadyExistsError';
   }
-}
-
-const DEFAULT_API_BASE_URL = 'http://localhost:3000';
-
-function getApiBaseUrl() {
-  const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
-
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/$/, '');
-  }
-
-  return DEFAULT_API_BASE_URL;
 }
 
 async function postJsonRequest<TResponse, TPayload>(

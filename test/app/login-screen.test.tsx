@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import {
@@ -8,11 +8,14 @@ import {
   loginWithPassword,
   registerUser,
 } from '@/api/auth';
+import { GroupsAuthenticationError, listMyGroups } from '@/api/groups';
 import GroupsRoute from '@/app/groups';
 import IndexRoute from '@/app/index';
 import LoginRoute from '@/app/login';
 import SignupRoute from '@/app/signup';
 import { requestGoogleIdToken } from '@/api/googleIdentity';
+import { clearAuthSession, getAuthSession, setAuthSession } from '@/features/auth/session';
+import type { MeGroupResponse } from '@/api/groups';
 
 jest.mock('@/api/auth', () => {
   const actual = jest.requireActual('@/api/auth');
@@ -28,10 +31,19 @@ jest.mock('@/api/googleIdentity', () => ({
   requestGoogleIdToken: jest.fn(),
 }));
 
+jest.mock('@/api/groups', () => {
+  const actual = jest.requireActual('@/api/groups');
+  return {
+    ...actual,
+    listMyGroups: jest.fn(),
+  };
+});
+
 const loginWithPasswordMock = loginWithPassword as jest.Mock;
 const loginWithGoogleMock = loginWithGoogle as jest.Mock;
 const registerUserMock = registerUser as jest.Mock;
 const requestGoogleIdTokenMock = requestGoogleIdToken as jest.Mock;
+const listMyGroupsMock = listMyGroups as jest.Mock;
 const expoRouterMock = jest.requireMock('expo-router') as {
   __resetRouter: () => void;
   __router: {
@@ -41,11 +53,32 @@ const expoRouterMock = jest.requireMock('expo-router') as {
   __setLocalSearchParams: (params: Record<string, string | undefined>) => void;
 };
 const groupActionLabel = 'Créer ou rejoindre un groupe';
+const groupsLoadingLabel = 'Chargement de vos groupes...';
 
 afterEach(() => {
+  clearAuthSession();
   expoRouterMock.__resetRouter();
   jest.clearAllMocks();
 });
+
+async function waitForGroupsToSettle() {
+  await waitFor(() => expect(screen.queryByText(groupsLoadingLabel)).not.toBeOnTheScreen());
+}
+
+function createDeferred<T>() {
+  let resolvePromise: (value: T) => void = () => undefined;
+  let rejectPromise: (reason: unknown) => void = () => undefined;
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+
+  return {
+    promise,
+    reject: rejectPromise,
+    resolve: resolvePromise,
+  };
+}
 
 test('redirects the index route to the login page', async () => {
   await render(<IndexRoute />);
@@ -91,6 +124,10 @@ test('submits trimmed password credentials and routes to verified groups', async
   expect(expoRouterMock.__router.replace).toHaveBeenCalledWith({
     pathname: '/groups',
     params: { emailVerified: 'true' },
+  });
+  expect(getAuthSession()).toEqual({
+    accessToken: 'token',
+    emailVerified: true,
   });
 });
 
@@ -142,6 +179,10 @@ test('submits Google ID tokens and routes to the groups page', async () => {
   expect(expoRouterMock.__router.replace).toHaveBeenCalledWith({
     pathname: '/groups',
     params: { emailVerified: 'false' },
+  });
+  expect(getAuthSession()).toEqual({
+    accessToken: 'token',
+    emailVerified: false,
   });
 });
 
@@ -289,23 +330,179 @@ test('shows a generic registration message for unexpected failures', async () =>
   expect(await screen.findByText('Inscription impossible pour le moment.')).toBeOnTheScreen();
 });
 
-test('shows the group action on the groups page when email is verified', async () => {
-  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+test('shows a loading state while groups are being loaded', async () => {
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  listMyGroupsMock.mockImplementation(() => new Promise(() => undefined));
+
+  await render(<GroupsRoute />);
+
+  expect(screen.getByText(groupsLoadingLabel)).toBeOnTheScreen();
+  expect(listMyGroupsMock).toHaveBeenCalledWith('token');
+});
+
+test('ignores loaded groups after the groups page unmounts', async () => {
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
   const result = await render(<GroupsRoute />);
 
+  result.unmount();
+
+  await act(async () => {
+    groupsRequest.resolve([]);
+  });
+
+  expect(listMyGroupsMock).toHaveBeenCalledWith('token');
+});
+
+test('ignores group loading errors after the groups page unmounts', async () => {
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  const result = await render(<GroupsRoute />);
+
+  result.unmount();
+
+  await act(async () => {
+    groupsRequest.reject(new Error('offline'));
+  });
+
+  expect(listMyGroupsMock).toHaveBeenCalledWith('token');
+});
+
+test('shows authenticated user groups on the groups page', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  const groups = [
+    {
+      id: 'home',
+      name: 'Maison Perret',
+      createdBy: 'sam',
+      createdAt: '2026-08-19T08:00:00.000Z',
+      membersCount: 4,
+      role: 'admin',
+    },
+    {
+      id: 'flatshare',
+      name: 'Coloc Voltaire',
+      createdBy: 'alex',
+      createdAt: '2026-08-18T08:00:00.000Z',
+      membersCount: 1,
+      role: 'member',
+    },
+  ] satisfies MeGroupResponse[];
+  const result = await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve(groups);
+  });
+
   expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
+  expect(await screen.findByText('Maison Perret')).toBeOnTheScreen();
+  await waitForGroupsToSettle();
+  expect(screen.getByText('Coloc Voltaire')).toBeOnTheScreen();
+  expect(screen.getByText('Responsable')).toBeOnTheScreen();
+  expect(screen.getByText('Membre')).toBeOnTheScreen();
+  expect(screen.getByText('4 membres')).toBeOnTheScreen();
+  expect(screen.getByText('1 membre')).toBeOnTheScreen();
   expect(screen.getByText(groupActionLabel)).toBeOnTheScreen();
   const connectedPressedStyles = result.root
     ?.findAll((node) => typeof node.props.style === 'function')
     .map((node) => [node.props.style({ pressed: false }), node.props.style({ pressed: true })]);
-  expect(connectedPressedStyles?.length).toBeGreaterThanOrEqual(1);
+  expect(connectedPressedStyles?.length).toBeGreaterThanOrEqual(3);
   fireEvent.press(screen.getByText(groupActionLabel));
+  fireEvent.press(screen.getByLabelText('Maison Perret, Responsable, 4 membres'));
 });
 
 test('hides the group action on the groups page when email is not verified', async () => {
   expoRouterMock.__setLocalSearchParams({ emailVerified: 'false' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: false,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([]);
+  });
+
+  expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
+  expect(await screen.findByText("Vous n'appartenez à aucun groupe pour le moment.")).toBeOnTheScreen();
+  await waitForGroupsToSettle();
+  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
+});
+
+test('shows a login prompt on the groups page without an auth session', async () => {
   await render(<GroupsRoute />);
 
   expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
-  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
+  expect(await screen.findByText('Connectez-vous pour afficher vos groupes.')).toBeOnTheScreen();
+  await waitForGroupsToSettle();
+  expect(listMyGroupsMock).not.toHaveBeenCalled();
+});
+
+test('shows an expired session message when the groups API rejects authentication', async () => {
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.reject(new GroupsAuthenticationError());
+  });
+
+  expect(await screen.findByText('Votre session a expiré. Connectez-vous à nouveau.')).toBeOnTheScreen();
+  await waitForGroupsToSettle();
+});
+
+test('shows a generic message when loading groups fails unexpectedly', async () => {
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.reject(new Error('offline'));
+  });
+
+  expect(await screen.findByText('Impossible de charger vos groupes pour le moment.')).toBeOnTheScreen();
+  await waitForGroupsToSettle();
 });
