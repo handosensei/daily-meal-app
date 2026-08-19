@@ -29,6 +29,7 @@ const loginWithPasswordMock = loginWithPassword as jest.Mock;
 const loginWithGoogleMock = loginWithGoogle as jest.Mock;
 const registerUserMock = registerUser as jest.Mock;
 const requestGoogleIdTokenMock = requestGoogleIdToken as jest.Mock;
+const groupActionLabel = 'Créer ou rejoindre un groupe';
 
 afterEach(() => {
   jest.clearAllMocks();
@@ -51,8 +52,13 @@ test('renders the login form with default credentials and actions', async () => 
 });
 
 test('submits trimmed password credentials and shows the groups page', async () => {
-  loginWithPasswordMock.mockResolvedValue({ accessToken: 'token', tokenType: 'Bearer', expiresIn: 3600 });
-  await render(<LoginScreen />);
+  loginWithPasswordMock.mockResolvedValue({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const result = await render(<LoginScreen />);
 
   fireEvent.changeText(screen.getByLabelText('E-mail'), '  sam@foyer.fr  ');
   fireEvent.changeText(screen.getByLabelText('Mot de passe'), 'secret');
@@ -65,6 +71,27 @@ test('submits trimmed password credentials and shows the groups page', async () 
     }),
   );
   expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.getByText(groupActionLabel)).toBeOnTheScreen();
+  const connectedPressedStyles = result.root
+    ?.findAll((node) => typeof node.props.style === 'function')
+    .map((node) => [node.props.style({ pressed: false }), node.props.style({ pressed: true })]);
+  expect(connectedPressedStyles?.length).toBeGreaterThanOrEqual(1);
+  fireEvent.press(screen.getByText(groupActionLabel));
+});
+
+test('hides the group action after password authentication when email is not verified', async () => {
+  loginWithPasswordMock.mockResolvedValue({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: false,
+  });
+  await render(<LoginScreen />);
+
+  fireEvent.press(screen.getByText('Se connecter'));
+
+  expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
 });
 
 test('shows the invalid credentials message for password authentication failures', async () => {
@@ -94,6 +121,7 @@ test('submits Google ID tokens and shows the groups page', async () => {
 
   await waitFor(() => expect(loginWithGoogleMock).toHaveBeenCalledWith({ idToken: 'google-token' }));
   expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
 });
 
 test('shows a Google-specific error when Google authentication fails', async () => {
@@ -181,7 +209,16 @@ test('validates registration password policy', async () => {
 });
 
 test('submits registration details and shows the groups page', async () => {
-  registerUserMock.mockResolvedValue({ id: 'user-id' });
+  registerUserMock.mockResolvedValue({
+    id: 'user-id',
+    lastname: 'Durand',
+    firstname: 'Alex',
+    email: 'alex@foyer.fr',
+    provider: null,
+    emailVerified: false,
+    createdAt: '2026-08-19T07:30:00.000Z',
+    lastLogin: null,
+  });
   await render(<LoginScreen />);
 
   fireEvent.press(screen.getByText("S'inscrire"));
@@ -200,6 +237,7 @@ test('submits registration details and shows the groups page', async () => {
     }),
   );
   expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
 });
 
 test('shows a duplicate email message during registration', async () => {

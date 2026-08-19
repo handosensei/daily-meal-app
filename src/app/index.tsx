@@ -43,13 +43,15 @@ export default function LoginScreen() {
   const [isSubmittingPassword, setSubmittingPassword] = useState(false);
   const [isSubmittingGoogle, setSubmittingGoogle] = useState(false);
   const [isSubmittingSignup, setSubmittingSignup] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   async function submitPasswordLogin() {
     setErrorMessage('');
     setSubmittingPassword(true);
 
     try {
-      await loginWithPassword({ email: email.trim(), password });
+      const loginResponse = await loginWithPassword({ email: email.trim(), password });
+      setEmailVerified(loginResponse.emailVerified === true);
       setScreenMode('groups');
     } catch (error) {
       setErrorMessage(
@@ -68,7 +70,8 @@ export default function LoginScreen() {
 
     try {
       const idToken = await requestGoogleIdToken();
-      await loginWithGoogle({ idToken });
+      const loginResponse = await loginWithGoogle({ idToken });
+      setEmailVerified(loginResponse.emailVerified === true);
       setScreenMode('groups');
     } catch {
       setErrorMessage('Connexion Google impossible pour le moment.');
@@ -112,12 +115,13 @@ export default function LoginScreen() {
     setSubmittingSignup(true);
 
     try {
-      await registerUser({
+      const registeredUser = await registerUser({
         lastname: lastname.trim(),
         firstname: firstname.trim(),
         email: signupEmail.trim(),
         password: signupPassword,
       });
+      setEmailVerified(registeredUser.emailVerified);
       setScreenMode('groups');
     } catch (error) {
       setSignupErrorMessage(
@@ -138,6 +142,18 @@ export default function LoginScreen() {
           <ThemedText accessibilityRole="header" style={styles.connectedTitle}>
             Mes groupes
           </ThemedText>
+          {emailVerified ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => undefined}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                styles.connectedPrimaryButton,
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText style={styles.primaryButtonText}>Créer ou rejoindre un groupe</ThemedText>
+            </Pressable>
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -735,5 +751,9 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     marginTop: 28,
     textAlign: 'center',
+  },
+  connectedPrimaryButton: {
+    alignSelf: 'stretch',
+    marginTop: 28,
   },
 });

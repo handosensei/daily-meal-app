@@ -18,6 +18,18 @@ export type LoginResponse = {
   accessToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
+  emailVerified?: boolean;
+};
+
+export type PublicUserResponse = {
+  id: string;
+  lastname: string;
+  firstname: string;
+  email: string;
+  provider: unknown | null;
+  emailVerified: boolean;
+  createdAt: string;
+  lastLogin: string | null;
 };
 
 export class InvalidCredentialsError extends Error {
@@ -83,7 +95,7 @@ export function loginWithGoogle(payload: GoogleLoginRequest) {
 }
 
 export function registerUser(payload: RegisterRequest) {
-  return postJsonRequest('/users', {
+  return postJsonRequest<PublicUserResponse, RegisterRequest & { passwordConfirmation: string }>('/users', {
     ...payload,
     passwordConfirmation: payload.password,
   });
