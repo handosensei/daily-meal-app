@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
-import LoginScreen from '@/app/index';
 import {
   EmailAlreadyExistsError,
   InvalidCredentialsError,
@@ -9,6 +8,10 @@ import {
   loginWithPassword,
   registerUser,
 } from '@/api/auth';
+import GroupsRoute from '@/app/groups';
+import IndexRoute from '@/app/index';
+import LoginRoute from '@/app/login';
+import SignupRoute from '@/app/signup';
 import { requestGoogleIdToken } from '@/api/googleIdentity';
 
 jest.mock('@/api/auth', () => {
@@ -29,14 +32,29 @@ const loginWithPasswordMock = loginWithPassword as jest.Mock;
 const loginWithGoogleMock = loginWithGoogle as jest.Mock;
 const registerUserMock = registerUser as jest.Mock;
 const requestGoogleIdTokenMock = requestGoogleIdToken as jest.Mock;
+const expoRouterMock = jest.requireMock('expo-router') as {
+  __resetRouter: () => void;
+  __router: {
+    push: jest.Mock;
+    replace: jest.Mock;
+  };
+  __setLocalSearchParams: (params: Record<string, string | undefined>) => void;
+};
 const groupActionLabel = 'Créer ou rejoindre un groupe';
 
 afterEach(() => {
+  expoRouterMock.__resetRouter();
   jest.clearAllMocks();
 });
 
-test('renders the login form with default credentials and actions', async () => {
-  const result = await render(<LoginScreen />);
+test('redirects the index route to the login page', async () => {
+  await render(<IndexRoute />);
+
+  expect(screen.getByTestId('redirect')).toHaveProp('href', '/login');
+});
+
+test('renders the login page with default credentials and actions', async () => {
+  const result = await render(<LoginRoute />);
 
   expect(screen.getByText('DailyMeal')).toBeOnTheScreen();
   expect(screen.getByLabelText('E-mail')).toHaveProp('value', 'sam@foyer.fr');
@@ -51,14 +69,14 @@ test('renders the login form with default credentials and actions', async () => 
   expect(pressedStyles?.length).toBeGreaterThanOrEqual(2);
 });
 
-test('submits trimmed password credentials and shows the groups page', async () => {
+test('submits trimmed password credentials and routes to verified groups', async () => {
   loginWithPasswordMock.mockResolvedValue({
     accessToken: 'token',
     tokenType: 'Bearer',
     expiresIn: 3600,
     emailVerified: true,
   });
-  const result = await render(<LoginScreen />);
+  await render(<LoginRoute />);
 
   fireEvent.changeText(screen.getByLabelText('E-mail'), '  sam@foyer.fr  ');
   fireEvent.changeText(screen.getByLabelText('Mot de passe'), 'secret');
@@ -70,33 +88,34 @@ test('submits trimmed password credentials and shows the groups page', async () 
       password: 'secret',
     }),
   );
-  expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
-  expect(screen.getByText(groupActionLabel)).toBeOnTheScreen();
-  const connectedPressedStyles = result.root
-    ?.findAll((node) => typeof node.props.style === 'function')
-    .map((node) => [node.props.style({ pressed: false }), node.props.style({ pressed: true })]);
-  expect(connectedPressedStyles?.length).toBeGreaterThanOrEqual(1);
-  fireEvent.press(screen.getByText(groupActionLabel));
+  expect(expoRouterMock.__router.replace).toHaveBeenCalledWith({
+    pathname: '/groups',
+    params: { emailVerified: 'true' },
+  });
 });
 
-test('hides the group action after password authentication when email is not verified', async () => {
+test('routes password authentication to unverified groups when email is not verified', async () => {
   loginWithPasswordMock.mockResolvedValue({
     accessToken: 'token',
     tokenType: 'Bearer',
     expiresIn: 3600,
     emailVerified: false,
   });
-  await render(<LoginScreen />);
+  await render(<LoginRoute />);
 
   fireEvent.press(screen.getByText('Se connecter'));
 
-  expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
-  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
+  await waitFor(() =>
+    expect(expoRouterMock.__router.replace).toHaveBeenCalledWith({
+      pathname: '/groups',
+      params: { emailVerified: 'false' },
+    }),
+  );
 });
 
 test('shows the invalid credentials message for password authentication failures', async () => {
   loginWithPasswordMock.mockRejectedValue(new InvalidCredentialsError());
-  await render(<LoginScreen />);
+  await render(<LoginRoute />);
 
   fireEvent.press(screen.getByText('Se connecter'));
 
@@ -105,38 +124,46 @@ test('shows the invalid credentials message for password authentication failures
 
 test('shows a generic password error for unexpected failures', async () => {
   loginWithPasswordMock.mockRejectedValue(new Error('network'));
-  await render(<LoginScreen />);
+  await render(<LoginRoute />);
 
   fireEvent.press(screen.getByText('Se connecter'));
 
   expect(await screen.findByText('Connexion impossible pour le moment.')).toBeOnTheScreen();
 });
 
-test('submits Google ID tokens and shows the groups page', async () => {
+test('submits Google ID tokens and routes to the groups page', async () => {
   requestGoogleIdTokenMock.mockResolvedValue('google-token');
   loginWithGoogleMock.mockResolvedValue({ accessToken: 'token', tokenType: 'Bearer', expiresIn: 3600 });
-  await render(<LoginScreen />);
+  await render(<LoginRoute />);
 
   fireEvent.press(screen.getByText('Continuer avec Google'));
 
   await waitFor(() => expect(loginWithGoogleMock).toHaveBeenCalledWith({ idToken: 'google-token' }));
-  expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
-  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
+  expect(expoRouterMock.__router.replace).toHaveBeenCalledWith({
+    pathname: '/groups',
+    params: { emailVerified: 'false' },
+  });
 });
 
 test('shows a Google-specific error when Google authentication fails', async () => {
   requestGoogleIdTokenMock.mockRejectedValue(new Error('popup blocked'));
-  await render(<LoginScreen />);
+  await render(<LoginRoute />);
 
   fireEvent.press(screen.getByText('Continuer avec Google'));
 
   expect(await screen.findByText('Connexion Google impossible pour le moment.')).toBeOnTheScreen();
 });
 
-test('opens the registration form from the login screen', async () => {
-  const result = await render(<LoginScreen />);
+test('opens the registration page from the login page', async () => {
+  await render(<LoginRoute />);
 
   fireEvent.press(screen.getByText("S'inscrire"));
+
+  expect(expoRouterMock.__router.push).toHaveBeenCalledWith('/signup');
+});
+
+test('renders the registration page', async () => {
+  const result = await render(<SignupRoute />);
 
   expect(screen.getByText('Inscription')).toBeOnTheScreen();
   expect(screen.getByText('Créer un compte')).toBeOnTheScreen();
@@ -153,22 +180,19 @@ test('opens the registration form from the login screen', async () => {
 });
 
 test('returns from registration to login', async () => {
-  await render(<LoginScreen />);
+  await render(<SignupRoute />);
 
-  fireEvent.press(screen.getByText("S'inscrire"));
   fireEvent.press(screen.getByLabelText('Retour à la connexion'));
 
-  expect(screen.getByText('DailyMeal')).toBeOnTheScreen();
-  expect(screen.getByText('Se connecter')).toBeOnTheScreen();
+  expect(expoRouterMock.__router.replace).toHaveBeenCalledWith('/login');
 });
 
 test.each([
   ['Nom', 'Sa', 'Le nom doit contenir au moins 3 caractères.'],
   ['Prénom', 'Al', 'Le prénom doit contenir au moins 3 caractères.'],
 ] as const)('validates minimum length for %s during registration', async (fieldLabel, value, message) => {
-  await render(<LoginScreen />);
+  await render(<SignupRoute />);
 
-  fireEvent.press(screen.getByText("S'inscrire"));
   fireEvent.changeText(screen.getByLabelText('Nom'), 'Durand');
   fireEvent.changeText(screen.getByLabelText('Prénom'), 'Alex');
   fireEvent.changeText(screen.getByLabelText(fieldLabel), value);
@@ -181,9 +205,8 @@ test.each([
 });
 
 test('validates registration email format', async () => {
-  await render(<LoginScreen />);
+  await render(<SignupRoute />);
 
-  fireEvent.press(screen.getByText("S'inscrire"));
   fireEvent.changeText(screen.getByLabelText('Nom'), 'Durand');
   fireEvent.changeText(screen.getByLabelText('Prénom'), 'Alex');
   fireEvent.changeText(screen.getByLabelText("E-mail d'inscription"), 'sam');
@@ -195,9 +218,8 @@ test('validates registration email format', async () => {
 });
 
 test('validates registration password policy', async () => {
-  await render(<LoginScreen />);
+  await render(<SignupRoute />);
 
-  fireEvent.press(screen.getByText("S'inscrire"));
   fireEvent.changeText(screen.getByLabelText('Nom'), 'Durand');
   fireEvent.changeText(screen.getByLabelText('Prénom'), 'Alex');
   fireEvent.changeText(screen.getByLabelText("E-mail d'inscription"), 'sam@foyer.fr');
@@ -208,7 +230,7 @@ test('validates registration password policy', async () => {
   expect(registerUserMock).not.toHaveBeenCalled();
 });
 
-test('submits registration details and shows the groups page', async () => {
+test('submits registration details and routes to the groups page', async () => {
   registerUserMock.mockResolvedValue({
     id: 'user-id',
     lastname: 'Durand',
@@ -219,9 +241,8 @@ test('submits registration details and shows the groups page', async () => {
     createdAt: '2026-08-19T07:30:00.000Z',
     lastLogin: null,
   });
-  await render(<LoginScreen />);
+  await render(<SignupRoute />);
 
-  fireEvent.press(screen.getByText("S'inscrire"));
   fireEvent.changeText(screen.getByLabelText('Nom'), '  Durand  ');
   fireEvent.changeText(screen.getByLabelText('Prénom'), '  Alex  ');
   fireEvent.changeText(screen.getByLabelText("E-mail d'inscription"), '  alex@foyer.fr  ');
@@ -236,15 +257,16 @@ test('submits registration details and shows the groups page', async () => {
       password: 'password',
     }),
   );
-  expect(await screen.findByText('Mes groupes')).toBeOnTheScreen();
-  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
+  expect(expoRouterMock.__router.replace).toHaveBeenCalledWith({
+    pathname: '/groups',
+    params: { emailVerified: 'false' },
+  });
 });
 
 test('shows a duplicate email message during registration', async () => {
   registerUserMock.mockRejectedValue(new EmailAlreadyExistsError());
-  await render(<LoginScreen />);
+  await render(<SignupRoute />);
 
-  fireEvent.press(screen.getByText("S'inscrire"));
   fireEvent.changeText(screen.getByLabelText('Nom'), 'Durand');
   fireEvent.changeText(screen.getByLabelText('Prénom'), 'Alex');
   fireEvent.changeText(screen.getByLabelText("E-mail d'inscription"), 'alex@foyer.fr');
@@ -256,9 +278,8 @@ test('shows a duplicate email message during registration', async () => {
 
 test('shows a generic registration message for unexpected failures', async () => {
   registerUserMock.mockRejectedValue(new Error('offline'));
-  await render(<LoginScreen />);
+  await render(<SignupRoute />);
 
-  fireEvent.press(screen.getByText("S'inscrire"));
   fireEvent.changeText(screen.getByLabelText('Nom'), 'Durand');
   fireEvent.changeText(screen.getByLabelText('Prénom'), 'Alex');
   fireEvent.changeText(screen.getByLabelText("E-mail d'inscription"), 'alex@foyer.fr');
@@ -266,4 +287,25 @@ test('shows a generic registration message for unexpected failures', async () =>
   fireEvent.press(screen.getByText('Continuer'));
 
   expect(await screen.findByText('Inscription impossible pour le moment.')).toBeOnTheScreen();
+});
+
+test('shows the group action on the groups page when email is verified', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  const result = await render(<GroupsRoute />);
+
+  expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.getByText(groupActionLabel)).toBeOnTheScreen();
+  const connectedPressedStyles = result.root
+    ?.findAll((node) => typeof node.props.style === 'function')
+    .map((node) => [node.props.style({ pressed: false }), node.props.style({ pressed: true })]);
+  expect(connectedPressedStyles?.length).toBeGreaterThanOrEqual(1);
+  fireEvent.press(screen.getByText(groupActionLabel));
+});
+
+test('hides the group action on the groups page when email is not verified', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'false' });
+  await render(<GroupsRoute />);
+
+  expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.queryByText(groupActionLabel)).not.toBeOnTheScreen();
 });
