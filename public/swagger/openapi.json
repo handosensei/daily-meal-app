@@ -163,7 +163,8 @@
                 "example": {
                   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                   "tokenType": "Bearer",
-                  "expiresIn": 86400
+                  "expiresIn": 86400,
+                  "emailVerified": false
                 }
               }
             }
@@ -241,7 +242,8 @@
                 "example": {
                   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                   "tokenType": "Bearer",
-                  "expiresIn": 86400
+                  "expiresIn": 86400,
+                  "emailVerified": true
                 }
               }
             }
@@ -319,6 +321,7 @@
                 "example": {
                   "id": "a590d72e-4a13-4a68-8e73-1f8c2c905f53",
                   "name": "Family dinners",
+                  "frequency": "weekly",
                   "createdBy": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
                   "createdAt": "2026-07-20T10:15:30.000Z"
                 }
@@ -382,6 +385,82 @@
         ]
       }
     },
+    "/me": {
+      "get": {
+        "description": "Returns the authenticated user profile with the groups they belong to, including membership role and status.",
+        "operationId": "MeController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns the authenticated user profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponseDto"
+                },
+                "example": {
+                  "id": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
+                  "lastname": "Doe",
+                  "firstname": "Jane",
+                  "email": "jane.doe@example.com",
+                  "createdAt": "2026-07-13T10:15:30.000Z",
+                  "lastLogin": "2026-07-14T10:15:30.000Z",
+                  "groups": [
+                    {
+                      "id": "a590d72e-4a13-4a68-8e73-1f8c2c905f53",
+                      "name": "Family dinners",
+                      "frequency": "weekly",
+                      "createdBy": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
+                      "createdAt": "2026-07-20T10:15:30.000Z",
+                      "membersCount": 2,
+                      "role": "admin",
+                      "status": "active"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request is missing a valid Bearer access token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "missingToken": {
+                    "summary": "Missing token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Authentication required",
+                      "error": "Unauthorized"
+                    }
+                  },
+                  "invalidToken": {
+                    "summary": "Invalid token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Invalid access token",
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get my profile",
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/me/groups": {
       "get": {
         "description": "Lists the active groups the authenticated user belongs to, including groups they created, with the active member count and the user role in each group.",
@@ -402,6 +481,7 @@
                   {
                     "id": "a590d72e-4a13-4a68-8e73-1f8c2c905f53",
                     "name": "Family dinners",
+                    "frequency": "weekly",
                     "createdBy": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
                     "createdAt": "2026-07-20T10:15:30.000Z",
                     "membersCount": 2,
@@ -659,12 +739,18 @@
             "type": "number",
             "description": "Token lifetime in seconds.",
             "example": 86400
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "description": "Whether the authenticated user email address is verified.",
+            "example": true
           }
         },
         "required": [
           "accessToken",
           "tokenType",
-          "expiresIn"
+          "expiresIn",
+          "emailVerified"
         ]
       },
       "GoogleLoginRequestDto": {
@@ -707,6 +793,16 @@
             "description": "Group name.",
             "example": "Family dinners"
           },
+          "frequency": {
+            "type": "string",
+            "description": "Meal planning frequency for the group.",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "example": "weekly"
+          },
           "createdBy": {
             "type": "string",
             "description": "Identifier of the user who created the group.",
@@ -722,8 +818,133 @@
         "required": [
           "id",
           "name",
+          "frequency",
           "createdBy",
           "createdAt"
+        ]
+      },
+      "MeMembershipGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique group identifier.",
+            "example": "a590d72e-4a13-4a68-8e73-1f8c2c905f53"
+          },
+          "name": {
+            "type": "string",
+            "description": "Group name.",
+            "example": "Family dinners"
+          },
+          "frequency": {
+            "type": "string",
+            "description": "Meal planning frequency for the group.",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "example": "weekly"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Identifier of the user who created the group.",
+            "example": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Group creation date and time.",
+            "example": "2026-07-20T10:15:30.000Z"
+          },
+          "membersCount": {
+            "type": "number",
+            "description": "Number of active members in the group.",
+            "example": 2,
+            "minimum": 1
+          },
+          "role": {
+            "type": "string",
+            "description": "Role of the authenticated user in the group.",
+            "enum": [
+              "admin",
+              "member"
+            ],
+            "example": "admin"
+          },
+          "status": {
+            "type": "string",
+            "description": "Membership status of the authenticated user in the group.",
+            "enum": [
+              "active",
+              "declined",
+              "left",
+              "pending",
+              "removed"
+            ],
+            "example": "active"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "frequency",
+          "createdBy",
+          "createdAt",
+          "membersCount",
+          "role",
+          "status"
+        ]
+      },
+      "MeResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique user identifier.",
+            "example": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2"
+          },
+          "lastname": {
+            "type": "string",
+            "example": "Doe"
+          },
+          "firstname": {
+            "type": "string",
+            "example": "Jane"
+          },
+          "email": {
+            "type": "string",
+            "example": "jane.doe@example.com"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Account creation date and time.",
+            "example": "2026-07-13T10:15:30.000Z"
+          },
+          "lastLogin": {
+            "type": "object",
+            "description": "Last login date and time, null when the user never logged in.",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-07-14T10:15:30.000Z"
+          },
+          "groups": {
+            "description": "Groups the authenticated user belongs to, with membership role and status.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeMembershipGroupResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "lastname",
+          "firstname",
+          "email",
+          "createdAt",
+          "lastLogin",
+          "groups"
         ]
       },
       "MeGroupResponseDto": {
@@ -738,6 +959,16 @@
             "type": "string",
             "description": "Group name.",
             "example": "Family dinners"
+          },
+          "frequency": {
+            "type": "string",
+            "description": "Meal planning frequency for the group.",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "example": "weekly"
           },
           "createdBy": {
             "type": "string",
@@ -769,6 +1000,7 @@
         "required": [
           "id",
           "name",
+          "frequency",
           "createdBy",
           "createdAt",
           "membersCount",
