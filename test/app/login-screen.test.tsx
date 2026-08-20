@@ -460,9 +460,9 @@ test('shows authenticated user groups on the groups page', async () => {
 
   expect(screen.getByText('Membres & rôles')).toBeOnTheScreen();
   expect(screen.getAllByText('Planning à la semaine').length).toBeGreaterThanOrEqual(2);
-  expect(screen.getByText('Sam P.')).toBeOnTheScreen();
+  expect(screen.getByText('P. Sam')).toBeOnTheScreen();
   expect(screen.getByText('Admin')).toBeOnTheScreen();
-  expect(screen.getByText('Mo D.')).toBeOnTheScreen();
+  expect(screen.getByText('D. Mo')).toBeOnTheScreen();
   expect(screen.getAllByText('Membre').length).toBeGreaterThanOrEqual(2);
   expect(screen.getByText('Inviter')).toBeOnTheScreen();
   const detailPressedStyles = result.root
@@ -636,7 +636,7 @@ test('ignores loaded group detail after returning to the groups list', async () 
   });
 
   expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
-  expect(screen.queryByText('Sam P.')).not.toBeOnTheScreen();
+  expect(screen.queryByText('P. Sam')).not.toBeOnTheScreen();
 });
 
 test('ignores group detail errors after returning to the groups list', async () => {

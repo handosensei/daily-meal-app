@@ -762,7 +762,7 @@ function getMemberDisplayName(member: GroupResponse['members'][number]) {
   const firstName = member.firstName?.trim() || 'Membre';
   const lastInitial = member.lastName?.trim().charAt(0).toUpperCase();
 
-  return lastInitial ? `${firstName} ${lastInitial}.` : firstName;
+  return lastInitial ? `${lastInitial}. ${firstName}` : firstName;
 }
 
 function getMemberColor(index: number) {
