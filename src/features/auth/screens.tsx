@@ -266,13 +266,6 @@ export function SignupScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.signupCard}>
-            <View style={styles.stepBadgeRow}>
-              <View style={styles.stepBadge}>
-                <ThemedText style={styles.stepBadgeText}>1b</ThemedText>
-              </View>
-              <ThemedText style={styles.stepTitle}>Inscription</ThemedText>
-            </View>
-
             <View style={styles.phoneSheet}>
               <View
                 accessibilityElementsHidden
