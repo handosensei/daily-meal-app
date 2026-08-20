@@ -450,8 +450,8 @@ test('shows authenticated user groups on the groups page', async () => {
       membersCount: 4,
       role: 'admin',
       members: [
-        { id: 'sam', firstName: 'Sam', lastName: 'Perret', role: 'admin' },
-        { id: 'mo', firstName: 'Mo', lastName: 'Durand', role: 'member' },
+        { id: 'sam', firstname: 'Carol', lastname: 'Bernard', role: 'admin' },
+        { id: 'mo', firstname: 'Alice', lastname: 'Martin', role: 'member' },
         { id: 'lina', firstName: 'Lina', lastName: 'Martin', role: 'member' },
         { id: 'theo', firstName: 'Théo', lastName: 'Bernard', role: 'member' },
       ],
@@ -460,9 +460,9 @@ test('shows authenticated user groups on the groups page', async () => {
 
   expect(screen.getByText('Membres & rôles')).toBeOnTheScreen();
   expect(screen.getAllByText('Planning à la semaine').length).toBeGreaterThanOrEqual(2);
-  expect(screen.getByText('P. Sam')).toBeOnTheScreen();
+  expect(screen.getByText('B. Carol')).toBeOnTheScreen();
   expect(screen.getByText('Admin')).toBeOnTheScreen();
-  expect(screen.getByText('D. Mo')).toBeOnTheScreen();
+  expect(screen.getByText('M. Alice')).toBeOnTheScreen();
   expect(screen.getAllByText('Membre').length).toBeGreaterThanOrEqual(2);
   expect(screen.getByText('Inviter')).toBeOnTheScreen();
   const detailPressedStyles = result.root

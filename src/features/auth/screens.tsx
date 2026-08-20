@@ -650,7 +650,7 @@ function GroupDetailScreen({
                     styles.summaryAvatar,
                     { backgroundColor: getMemberColor(index), marginLeft: index === 0 ? 0 : -10 },
                   ]}>
-                  <ThemedText style={styles.summaryAvatarText}>{getMemberInitial(member.firstName)}</ThemedText>
+                  <ThemedText style={styles.summaryAvatarText}>{getMemberInitial(member)}</ThemedText>
                 </View>
               ))}
             </View>
@@ -720,7 +720,7 @@ function MemberRow({
   return (
     <View accessibilityLabel={`${getMemberDisplayName(member)}, ${roleLabel}`} style={styles.memberRow}>
       <View style={[styles.memberAvatar, { backgroundColor: getMemberColor(index) }]}>
-        <ThemedText style={styles.memberAvatarText}>{getMemberInitial(member.firstName)}</ThemedText>
+        <ThemedText style={styles.memberAvatarText}>{getMemberInitial(member)}</ThemedText>
       </View>
       <View style={styles.memberDetails}>
         <View style={styles.memberNameRow}>
@@ -754,15 +754,23 @@ function getSummaryMembers(group: MeGroupResponse | GroupResponse, members: Grou
   }));
 }
 
-function getMemberInitial(firstName?: string) {
-  return firstName?.trim().charAt(0).toUpperCase() || '?';
+function getMemberInitial(member: GroupResponse['members'][number]) {
+  return getMemberFirstName(member).charAt(0).toUpperCase() || '?';
 }
 
 function getMemberDisplayName(member: GroupResponse['members'][number]) {
-  const firstName = member.firstName?.trim() || 'Membre';
-  const lastInitial = member.lastName?.trim().charAt(0).toUpperCase();
+  const firstName = getMemberFirstName(member) || 'Membre';
+  const lastInitial = getMemberLastName(member).charAt(0).toUpperCase();
 
   return lastInitial ? `${lastInitial}. ${firstName}` : firstName;
+}
+
+function getMemberFirstName(member: GroupResponse['members'][number]) {
+  return (member.firstname ?? member.firstName ?? '').trim();
+}
+
+function getMemberLastName(member: GroupResponse['members'][number]) {
+  return (member.lastname ?? member.lastName ?? '').trim();
 }
 
 function getMemberColor(index: number) {
