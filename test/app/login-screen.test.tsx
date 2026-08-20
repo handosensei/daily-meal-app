@@ -8,7 +8,7 @@ import {
   loginWithPassword,
   registerUser,
 } from '@/api/auth';
-import { GroupsAuthenticationError, listMyGroups } from '@/api/groups';
+import { getGroup, GroupsAuthenticationError, listMyGroups } from '@/api/groups';
 import GroupsRoute from '@/app/groups';
 import IndexRoute from '@/app/index';
 import LoginRoute from '@/app/login';
@@ -35,6 +35,7 @@ jest.mock('@/api/groups', () => {
   const actual = jest.requireActual('@/api/groups');
   return {
     ...actual,
+    getGroup: jest.fn(),
     listMyGroups: jest.fn(),
   };
 });
@@ -43,6 +44,7 @@ const loginWithPasswordMock = loginWithPassword as jest.Mock;
 const loginWithGoogleMock = loginWithGoogle as jest.Mock;
 const registerUserMock = registerUser as jest.Mock;
 const requestGoogleIdTokenMock = requestGoogleIdToken as jest.Mock;
+const getGroupMock = getGroup as jest.Mock;
 const listMyGroupsMock = listMyGroups as jest.Mock;
 const expoRouterMock = jest.requireMock('expo-router') as {
   __resetRouter: () => void;
@@ -393,7 +395,9 @@ test('shows authenticated user groups on the groups page', async () => {
     emailVerified: true,
   });
   const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
   listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
   const groups = [
     {
       id: 'home',
@@ -433,6 +437,413 @@ test('shows authenticated user groups on the groups page', async () => {
   expect(connectedPressedStyles?.length).toBeGreaterThanOrEqual(3);
   fireEvent.press(screen.getByText(groupActionLabel));
   fireEvent.press(screen.getByLabelText('Maison Perret, Responsable, 4 membres'));
+  expect(getGroupMock).toHaveBeenCalledWith('token', 'home');
+  expect(screen.getByLabelText('Retour à la liste des groupes')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Paramètres du groupe Maison Perret')).toBeOnTheScreen();
+  expect(screen.getByText('Chargement du groupe...')).toBeOnTheScreen();
+
+  await act(async () => {
+    groupDetailRequest.resolve({
+      id: 'home',
+      name: 'Maison Perret',
+      frequency: 'Planning à la semaine',
+      membersCount: 4,
+      role: 'admin',
+      members: [
+        { id: 'sam', firstname: 'Carol', lastname: 'Bernard', role: 'admin' },
+        { id: 'mo', firstname: 'Alice', lastname: 'Martin', role: 'member' },
+        { id: 'lina', firstName: 'Lina', lastName: 'Martin', role: 'member' },
+        { id: 'theo', firstName: 'Théo', lastName: 'Bernard', role: 'member' },
+      ],
+    });
+  });
+
+  expect(screen.getByText('Membres & rôles')).toBeOnTheScreen();
+  expect(screen.getAllByText('Planning à la semaine').length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText('B. Carol')).toBeOnTheScreen();
+  expect(screen.getByText('Admin')).toBeOnTheScreen();
+  expect(screen.getByText('M. Alice')).toBeOnTheScreen();
+  expect(screen.getAllByText('Membre').length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText('Inviter')).toBeOnTheScreen();
+  const detailPressedStyles = result.root
+    ?.findAll((node) => typeof node.props.style === 'function')
+    .map((node) => [node.props.style({ pressed: false }), node.props.style({ pressed: true })]);
+  expect(detailPressedStyles?.length).toBeGreaterThanOrEqual(3);
+  fireEvent.press(screen.getByLabelText('Paramètres du groupe Maison Perret'));
+  fireEvent.press(screen.getByLabelText('Inviter des membres dans Maison Perret'));
+  fireEvent.press(screen.getByLabelText('Retour à la liste des groupes'));
+  expect(screen.getByText('Coloc Voltaire')).toBeOnTheScreen();
+});
+
+test('shows a calm empty members state when a selected group has no members', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  const groups = [
+    {
+      id: 'flatshare',
+      name: 'Coloc Voltaire',
+      createdBy: 'alex',
+      createdAt: '2026-08-18T08:00:00.000Z',
+      membersCount: 1,
+      role: 'member',
+    },
+  ] satisfies MeGroupResponse[];
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve(groups);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Coloc Voltaire, Membre, 1 membre'));
+
+  await act(async () => {
+    groupDetailRequest.resolve({
+      id: 'flatshare',
+      name: 'Coloc Voltaire',
+      frequency: 'Tous les quinze jours',
+      membersCount: 0,
+      role: 'member',
+      members: [],
+    });
+  });
+
+  expect(screen.getByText('Coloc Voltaire')).toBeOnTheScreen();
+  expect(screen.getAllByText('Tous les quinze jours').length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText('Aucun membre à afficher pour le moment.')).toBeOnTheScreen();
+  expect(screen.getByText('Inviter')).toBeOnTheScreen();
+});
+
+test('shows an expired session message when the group detail API rejects authentication', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 4,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 4 membres'));
+
+  await act(async () => {
+    groupDetailRequest.reject(new GroupsAuthenticationError());
+  });
+
+  expect(await screen.findByText('Votre session a expiré. Connectez-vous à nouveau.')).toBeOnTheScreen();
+});
+
+test('shows a generic message when loading group detail fails unexpectedly', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 4,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 4 membres'));
+
+  await act(async () => {
+    groupDetailRequest.reject(new Error('offline'));
+  });
+
+  expect(await screen.findByText('Impossible de charger ce groupe pour le moment.')).toBeOnTheScreen();
+});
+
+test('ignores loaded group detail after returning to the groups list', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 4,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 4 membres'));
+  fireEvent.press(screen.getByLabelText('Retour à la liste des groupes'));
+
+  await act(async () => {
+    groupDetailRequest.resolve({
+      id: 'home',
+      name: 'Maison Perret',
+      frequency: 'Planning à la semaine',
+      membersCount: 1,
+      role: 'admin',
+      members: [{ id: 'sam', firstName: 'Sam', lastName: 'Perret', role: 'admin' }],
+    });
+  });
+
+  expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.queryByText('P. Sam')).not.toBeOnTheScreen();
+});
+
+test('ignores group detail errors after returning to the groups list', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 4,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 4 membres'));
+  fireEvent.press(screen.getByLabelText('Retour à la liste des groupes'));
+
+  await act(async () => {
+    groupDetailRequest.reject(new Error('offline'));
+  });
+
+  expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
+  expect(screen.queryByText('Impossible de charger ce groupe pour le moment.')).not.toBeOnTheScreen();
+});
+
+test('ignores group detail loading completion after returning to the groups list', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 4,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 4 membres'));
+  fireEvent.press(screen.getByLabelText('Retour à la liste des groupes'));
+
+  await act(async () => {
+    groupDetailRequest.resolve({
+      id: 'home',
+      name: 'Maison Perret',
+      frequency: 'Planning à la semaine',
+      membersCount: 1,
+      role: 'admin',
+      members: [{ id: 'sam', firstName: 'Sam', lastName: 'Perret', role: 'admin' }],
+    });
+  });
+
+  expect(screen.queryByText('Chargement du groupe...')).not.toBeOnTheScreen();
+});
+
+test('shows member first name without a last initial when the last name is blank', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 1,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 1 membre'));
+
+  await act(async () => {
+    groupDetailRequest.resolve({
+      id: 'home',
+      name: 'Maison Perret',
+      frequency: 'Planning à la semaine',
+      membersCount: 1,
+      role: 'admin',
+      members: [{ id: 'sam', firstName: 'Sam', lastName: ' ', role: 'admin' }],
+    });
+  });
+
+  expect(screen.getByText('Sam')).toBeOnTheScreen();
+});
+
+test('keeps the group detail visible when a member name is missing from the API response', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 1,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 1 membre'));
+
+  await act(async () => {
+    groupDetailRequest.resolve({
+      id: 'home',
+      name: 'Maison Perret',
+      frequency: 'Planning à la semaine',
+      membersCount: 1,
+      role: 'admin',
+      members: [{ id: 'guest', role: 'member' }],
+    });
+  });
+
+  expect(screen.getByText('Maison Perret')).toBeOnTheScreen();
+  expect(screen.getAllByText('Membre').length).toBeGreaterThanOrEqual(2);
+});
+
+test('keeps the groups list mounted when a group is selected without an auth session', async () => {
+  await render(<GroupsRoute />);
+
+  expect(screen.getByText('Mes groupes')).toBeOnTheScreen();
+});
+
+test('placeholder summary avatars handle groups without a member count', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 0,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 0 membre'));
+
+  expect(screen.getByText('Chargement de la fréquence')).toBeOnTheScreen();
 });
 
 test('hides the group action on the groups page when email is not verified', async () => {

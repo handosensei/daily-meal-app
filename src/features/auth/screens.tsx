@@ -19,7 +19,13 @@ import {
   loginWithPassword,
   registerUser,
 } from '@/api/auth';
-import { GroupsAuthenticationError, listMyGroups, type MeGroupResponse } from '@/api/groups';
+import {
+  getGroup,
+  GroupsAuthenticationError,
+  listMyGroups,
+  type GroupResponse,
+  type MeGroupResponse,
+} from '@/api/groups';
 import { requestGoogleIdToken } from '@/api/googleIdentity';
 import { ThemedText } from '@/components/themed-text';
 import { getAuthSession, setAuthSession } from '@/features/auth/session';
@@ -402,6 +408,7 @@ export function GroupsScreen() {
   const authSession = getAuthSession();
   const canCreateOrJoinGroup = emailVerified === 'true' || authSession?.emailVerified === true;
   const [groups, setGroups] = useState<MeGroupResponse[]>([]);
+  const [selectedGroupSummary, setSelectedGroupSummary] = useState<MeGroupResponse | null>(null);
   const [isLoadingGroups, setLoadingGroups] = useState(true);
   const [groupsErrorMessage, setGroupsErrorMessage] = useState('');
 
@@ -446,6 +453,16 @@ export function GroupsScreen() {
     };
   }, [authSession]);
 
+  if (selectedGroupSummary && authSession) {
+    return (
+      <GroupDetailScreen
+        accessToken={authSession.accessToken}
+        groupSummary={selectedGroupSummary}
+        onBack={() => setSelectedGroupSummary(null)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.connectedContainer}>
       <ScrollView contentContainerStyle={styles.connectedContent} showsVerticalScrollIndicator={false}>
@@ -482,7 +499,7 @@ export function GroupsScreen() {
           {!isLoadingGroups && !groupsErrorMessage && groups.length > 0 ? (
             <View style={styles.groupList}>
               {groups.map((group) => (
-                <GroupCard group={group} key={group.id} />
+                <GroupCard group={group} key={group.id} onPress={() => setSelectedGroupSummary(group)} />
               ))}
             </View>
           ) : null}
@@ -505,7 +522,7 @@ export function GroupsScreen() {
   );
 }
 
-function GroupCard({ group }: { group: MeGroupResponse }) {
+function GroupCard({ group, onPress }: { group: MeGroupResponse; onPress: () => void }) {
   const roleLabel = group.role === 'admin' ? 'Responsable' : 'Membre';
   const membersLabel = `${group.membersCount} ${group.membersCount > 1 ? 'membres' : 'membre'}`;
 
@@ -513,6 +530,7 @@ function GroupCard({ group }: { group: MeGroupResponse }) {
     <Pressable
       accessibilityLabel={`${group.name}, ${roleLabel}, ${membersLabel}`}
       accessibilityRole="button"
+      onPress={onPress}
       style={({ pressed }) => [styles.groupCard, pressed && styles.pressed]}>
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.groupAvatar}>
         <ThemedText style={styles.groupAvatarText}>{group.name.charAt(0).toUpperCase()}</ThemedText>
@@ -535,6 +553,228 @@ function GroupCard({ group }: { group: MeGroupResponse }) {
       </ThemedText>
     </Pressable>
   );
+}
+
+function GroupDetailScreen({
+  accessToken,
+  groupSummary,
+  onBack,
+}: {
+  accessToken: string;
+  groupSummary: MeGroupResponse;
+  onBack: () => void;
+}) {
+  const [group, setGroup] = useState<GroupResponse | null>(null);
+  const [isLoadingGroup, setLoadingGroup] = useState(true);
+  const [groupErrorMessage, setGroupErrorMessage] = useState('');
+  const activeGroup = group ?? groupSummary;
+  const members = group?.members ?? [];
+  const membersCount = group?.membersCount ?? groupSummary.membersCount;
+  const membersLabel = `${membersCount} ${membersCount > 1 ? 'membres' : 'membre'}`;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGroup() {
+      setLoadingGroup(true);
+      setGroupErrorMessage('');
+
+      try {
+        const loadedGroup = await getGroup(accessToken, groupSummary.id);
+
+        if (isMounted) {
+          setGroup(loadedGroup);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setGroupErrorMessage(
+            error instanceof GroupsAuthenticationError
+              ? 'Votre session a expiré. Connectez-vous à nouveau.'
+              : 'Impossible de charger ce groupe pour le moment.',
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingGroup(false);
+        }
+      }
+    }
+
+    loadGroup();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, groupSummary.id]);
+
+  return (
+    <SafeAreaView style={styles.connectedContainer}>
+      <ScrollView contentContainerStyle={styles.groupDetailContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.groupDetailPanel}>
+          <View style={styles.groupDetailHeader}>
+            <Pressable
+              accessibilityLabel="Retour à la liste des groupes"
+              accessibilityRole="button"
+              onPress={onBack}
+              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <ThemedText style={styles.iconButtonText}>‹</ThemedText>
+            </Pressable>
+            <View style={styles.groupTitleBlock}>
+              <ThemedText accessibilityRole="header" numberOfLines={2} style={styles.groupDetailTitle}>
+                {activeGroup.name}
+              </ThemedText>
+              {group?.frequency ? (
+                <ThemedText numberOfLines={2} style={styles.groupFrequency}>
+                  {group.frequency}
+                </ThemedText>
+              ) : null}
+            </View>
+            <Pressable
+              accessibilityLabel={`Paramètres du groupe ${activeGroup.name}`}
+              accessibilityRole="button"
+              onPress={() => undefined}
+              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <ThemedText style={styles.settingsIcon}>⚙</ThemedText>
+            </Pressable>
+          </View>
+
+          <View style={styles.groupSummaryCard}>
+            <View
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={styles.memberStack}>
+              {getSummaryMembers(activeGroup, members).map((member, index) => (
+                <View
+                  key={member.id}
+                  style={[
+                    styles.summaryAvatar,
+                    { backgroundColor: getMemberColor(index), marginLeft: index === 0 ? 0 : -10 },
+                  ]}>
+                  <ThemedText style={styles.summaryAvatarText}>{getMemberInitial(member)}</ThemedText>
+                </View>
+              ))}
+            </View>
+            <View style={styles.summaryTextBlock}>
+              <ThemedText style={styles.summaryCount}>{membersLabel}</ThemedText>
+              <ThemedText style={styles.summarySubtitle}>{group?.frequency ?? 'Chargement de la fréquence'}</ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.membersSectionHeader}>
+            <ThemedText style={styles.membersSectionTitle}>Membres & rôles</ThemedText>
+            <ThemedText style={styles.membersSectionCount}>{membersLabel}</ThemedText>
+          </View>
+
+          {isLoadingGroup ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ActivityIndicator color="#A83E60" />
+              <ThemedText style={styles.groupsStateText}>Chargement du groupe...</ThemedText>
+            </View>
+          ) : null}
+
+          {!isLoadingGroup && groupErrorMessage ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ThemedText style={styles.errorText}>{groupErrorMessage}</ThemedText>
+            </View>
+          ) : null}
+
+          {!isLoadingGroup && !groupErrorMessage && members.length > 0 ? (
+            <View style={styles.memberList}>
+              {members.map((member, index) => (
+                <MemberRow key={member.id} member={member} index={index} />
+              ))}
+            </View>
+          ) : null}
+
+          {!isLoadingGroup && !groupErrorMessage && members.length === 0 ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ThemedText style={styles.groupsStateText}>
+                Aucun membre à afficher pour le moment.
+              </ThemedText>
+            </View>
+          ) : null}
+
+          <Pressable
+            accessibilityLabel={`Inviter des membres dans ${activeGroup.name}`}
+            accessibilityRole="button"
+            onPress={() => undefined}
+            style={({ pressed }) => [styles.primaryButton, styles.inviteButton, pressed && styles.pressed]}>
+            <ThemedText style={styles.inviteIcon}>⊕</ThemedText>
+            <ThemedText style={styles.primaryButtonText}>Inviter</ThemedText>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function MemberRow({
+  member,
+  index,
+}: {
+  member: GroupResponse['members'][number];
+  index: number;
+}) {
+  const roleLabel = member.role === 'admin' ? 'Admin' : 'Membre';
+
+  return (
+    <View accessibilityLabel={`${getMemberDisplayName(member)}, ${roleLabel}`} style={styles.memberRow}>
+      <View style={[styles.memberAvatar, { backgroundColor: getMemberColor(index) }]}>
+        <ThemedText style={styles.memberAvatarText}>{getMemberInitial(member)}</ThemedText>
+      </View>
+      <View style={styles.memberDetails}>
+        <View style={styles.memberNameRow}>
+          <ThemedText numberOfLines={1} style={styles.memberName}>
+            {getMemberDisplayName(member)}
+          </ThemedText>
+          <View style={[styles.roleBadge, member.role === 'admin' && styles.adminRoleBadge]}>
+            <ThemedText style={[styles.roleBadgeText, member.role === 'admin' && styles.adminRoleBadgeText]}>
+              {roleLabel}
+            </ThemedText>
+          </View>
+        </View>
+      </View>
+      <ThemedText accessibilityElementsHidden importantForAccessibility="no" style={styles.memberChevron}>
+        ›
+      </ThemedText>
+    </View>
+  );
+}
+
+function getSummaryMembers(group: MeGroupResponse | GroupResponse, members: GroupResponse['members']) {
+  if (members.length > 0) {
+    return members.slice(0, 4);
+  }
+
+  return Array.from({ length: Math.min(group.membersCount, 4) }, (_, index) => ({
+    id: `${group.id}-placeholder-${index}`,
+    firstName: group.name.charAt(index),
+    lastName: '',
+    role: 'member' as const,
+  }));
+}
+
+function getMemberInitial(member: GroupResponse['members'][number]) {
+  return getMemberFirstName(member).charAt(0).toUpperCase() || '?';
+}
+
+function getMemberDisplayName(member: GroupResponse['members'][number]) {
+  const firstName = getMemberFirstName(member) || 'Membre';
+  const lastInitial = getMemberLastName(member).charAt(0).toUpperCase();
+
+  return lastInitial ? `${lastInitial}. ${firstName}` : firstName;
+}
+
+function getMemberFirstName(member: GroupResponse['members'][number]) {
+  return (member.firstname ?? member.firstName ?? '').trim();
+}
+
+function getMemberLastName(member: GroupResponse['members'][number]) {
+  return (member.lastname ?? member.lastName ?? '').trim();
+}
+
+function getMemberColor(index: number) {
+  return ['#6D825E', '#5D7C8A', '#955E7F', '#8B5773'][index % 4];
 }
 
 function BrandMark() {
@@ -981,5 +1221,191 @@ const styles = StyleSheet.create({
   },
   connectedPrimaryButton: {
     marginTop: 28,
+  },
+  groupDetailContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+  },
+  groupDetailPanel: {
+    width: '100%',
+    maxWidth: 390,
+    minHeight: '100%',
+    borderRadius: 24,
+    backgroundColor: '#FFFCFC',
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+  },
+  groupDetailHeader: {
+    minHeight: 56,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  iconButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  iconButtonText: {
+    color: '#4D4448',
+    fontSize: 34,
+    fontWeight: '400',
+    lineHeight: 38,
+  },
+  settingsIcon: {
+    color: '#4D4448',
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 28,
+  },
+  groupTitleBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  groupDetailTitle: {
+    color: '#2E2529',
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 30,
+  },
+  groupFrequency: {
+    color: '#6E6268',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  groupSummaryCard: {
+    minHeight: 80,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2D6DA',
+    backgroundColor: '#FFFFFF',
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    shadowColor: '#2E2026',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  memberStack: {
+    minWidth: 126,
+    flexDirection: 'row',
+  },
+  summaryAvatar: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  summaryAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  summaryTextBlock: {
+    flex: 1,
+    gap: 3,
+  },
+  summaryCount: {
+    color: '#2E2529',
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  summarySubtitle: {
+    color: '#6E6268',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  membersSectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 28,
+  },
+  membersSectionTitle: {
+    color: '#4D4448',
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  membersSectionCount: {
+    color: '#766B70',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  memberList: {
+    marginTop: 8,
+  },
+  memberRow: {
+    minHeight: 72,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E6DDE0',
+    paddingVertical: 12,
+  },
+  memberAvatar: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+  },
+  memberAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  memberDetails: {
+    flex: 1,
+  },
+  memberNameRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  memberName: {
+    color: '#2E2529',
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  memberChevron: {
+    color: '#766B70',
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 30,
+  },
+  inviteButton: {
+    minHeight: 52,
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 28,
+  },
+  inviteIcon: {
+    color: '#FFFFFF',
+    fontSize: 21,
+    fontWeight: '800',
+    lineHeight: 24,
   },
 });
