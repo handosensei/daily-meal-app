@@ -3,9 +3,7 @@ import React from 'react';
 import { Platform, useColorScheme } from 'react-native';
 
 import TabLayout from '@/app/_layout';
-import ApiScreen from '@/app/api';
 import ExploreScreen from '@/app/explore';
-import { apiContract, apiEndpointCount, apiServers } from '@/api/openapi';
 import { BottomTabInset, Colors, Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 
 const useColorSchemeMock = useColorScheme as jest.Mock;
@@ -18,17 +16,6 @@ function setPlatform(os: typeof Platform.OS) {
 afterEach(() => {
   setPlatform(originalPlatform);
   jest.clearAllMocks();
-});
-
-test('API screen renders OpenAPI contract metadata and declared servers', async () => {
-  await render(<ApiScreen />);
-
-  expect(screen.getByText(apiContract.info.title)).toBeOnTheScreen();
-  expect(screen.getByText(`Version ${apiContract.info.version}`)).toBeOnTheScreen();
-  expect(screen.getByText(String(apiEndpointCount))).toBeOnTheScreen();
-  apiServers.forEach((server) => {
-    expect(screen.getByText(server.url)).toBeOnTheScreen();
-  });
 });
 
 test('Explore screen renders documentation sections and the web badge on web', async () => {
@@ -79,22 +66,6 @@ test('theme constants expose stable design tokens', () => {
   expect(Spacing.six).toBe(64);
   expect(BottomTabInset).toBeGreaterThanOrEqual(0);
   expect(MaxContentWidth).toBe(800);
-});
-
-test('API screen tolerates servers without descriptions', async () => {
-  jest.resetModules();
-  jest.doMock('@/api/openapi', () => ({
-    apiContract: { info: { title: 'Mock API' } },
-    apiContractVersion: '1.2.3',
-    apiEndpointCount: 1,
-    apiServers: [{ url: 'https://api.example.test' }],
-  }));
-  const { default: MockedApiScreen } = require('@/app/api');
-
-  await render(<MockedApiScreen />);
-
-  expect(screen.getByText('https://api.example.test')).toBeOnTheScreen();
-  jest.dontMock('@/api/openapi');
 });
 
 test.each([

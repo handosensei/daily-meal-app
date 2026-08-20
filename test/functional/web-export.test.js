@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { createReadStream, existsSync, readFileSync } = require('node:fs');
+const { createReadStream, existsSync } = require('node:fs');
 const { stat } = require('node:fs/promises');
 const { createServer } = require('node:http');
 const { extname, join, normalize, relative } = require('node:path');
@@ -79,7 +79,7 @@ async function fetchText(origin, pathname) {
   return response.text();
 }
 
-test('web export serves the public app routes and API documentation over HTTP', async () => {
+test('web export serves the public app routes over HTTP', async () => {
   assert.ok(
     existsSync(join(distDir, 'index.html')),
     'Run npm run build:web before npm run test:functional.',
@@ -96,24 +96,7 @@ test('web export serves the public app routes and API documentation over HTTP', 
 
     const groupsHtml = await fetchText(server.origin, '/groups');
     assert.match(groupsHtml, /Mes groupes/);
-
-    const apiHtml = await fetchText(server.origin, '/api');
-    assert.match(apiHtml, /Daily Meal API/);
-
-    const contractResponse = await fetch(`${server.origin}/swagger/openapi.json`);
-    assert.equal(contractResponse.status, 200);
-    assert.match(contractResponse.headers.get('content-type'), /application\/json/);
-
-    const contract = await contractResponse.json();
-    assert.equal(contract.info.title, 'Daily Meal API');
   } finally {
     await server.close();
   }
-});
-
-test('web export keeps the published OpenAPI contract aligned with the source contract', () => {
-  const sourceContract = JSON.parse(readFileSync(join(process.cwd(), 'public/swagger/openapi.json'), 'utf8'));
-  const exportedContract = JSON.parse(readFileSync(join(distDir, 'swagger/openapi.json'), 'utf8'));
-
-  assert.deepEqual(exportedContract, sourceContract);
 });

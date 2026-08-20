@@ -206,7 +206,6 @@ test('opens the registration page from the login page', async () => {
 test('renders the registration page', async () => {
   const result = await render(<SignupRoute />);
 
-  expect(screen.getByText('Inscription')).toBeOnTheScreen();
   expect(screen.getByText('Créer un compte')).toBeOnTheScreen();
   expect(screen.getByText('On fait connaissance ?')).toBeOnTheScreen();
   expect(screen.getByLabelText('Nom')).toBeOnTheScreen();

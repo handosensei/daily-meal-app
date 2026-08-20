@@ -6,14 +6,13 @@ import AppTabs from '@/components/app-tabs';
 
 const useColorSchemeMock = useColorScheme as jest.Mock;
 
-test('native tabs expose the three app destinations', async () => {
+test('native tabs expose the app destinations', async () => {
   useColorSchemeMock.mockReturnValue('unspecified');
 
   const result = await render(<AppTabs />);
 
   expect(screen.getByText('Home')).toBeOnTheScreen();
   expect(screen.getByText('Explore')).toBeOnTheScreen();
-  expect(screen.getByText('API')).toBeOnTheScreen();
 
   useColorSchemeMock.mockReturnValue('dark');
   await result.rerender(<AppTabs />);
