@@ -385,6 +385,114 @@
         ]
       }
     },
+    "/groups/{id}": {
+      "get": {
+        "description": "Returns the group details and active users linked to the group. A group can only be read by one of its active members. Requests from authenticated users outside the group return 404.",
+        "operationId": "GroupsController_getDetails",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns the group details and active users linked to the group.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupDetailsResponseDto"
+                },
+                "example": {
+                  "id": "a590d72e-4a13-4a68-8e73-1f8c2c905f53",
+                  "name": "Family dinners",
+                  "frequency": "weekly",
+                  "createdBy": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
+                  "createdAt": "2026-07-20T10:15:30.000Z",
+                  "membersCount": 2,
+                  "members": [
+                    {
+                      "id": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2",
+                      "lastname": "Doe",
+                      "firstname": "Jane",
+                      "email": "jane.doe@example.com",
+                      "role": "admin",
+                      "status": "active",
+                      "joinedAt": "2026-07-20T10:15:30.000Z"
+                    },
+                    {
+                      "id": "0f173a1e-c552-4bd0-9428-4e0c650a01ad",
+                      "lastname": "Smith",
+                      "firstname": "John",
+                      "email": "john.smith@example.com",
+                      "role": "member",
+                      "status": "active",
+                      "joinedAt": "2026-07-21T10:15:30.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request is missing a valid Bearer access token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "missingToken": {
+                    "summary": "Missing token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Authentication required",
+                      "error": "Unauthorized"
+                    }
+                  },
+                  "invalidToken": {
+                    "summary": "Invalid token",
+                    "value": {
+                      "statusCode": 401,
+                      "message": "Invalid access token",
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The group does not exist or is not visible to the authenticated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "Group not found",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get group details",
+        "tags": [
+          "groups"
+        ]
+      }
+    },
     "/me": {
       "get": {
         "description": "Returns the authenticated user profile with the groups they belong to, including membership role and status.",
@@ -821,6 +929,121 @@
           "frequency",
           "createdBy",
           "createdAt"
+        ]
+      },
+      "GroupMemberResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique user identifier.",
+            "example": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2"
+          },
+          "lastname": {
+            "type": "string",
+            "example": "Doe"
+          },
+          "firstname": {
+            "type": "string",
+            "example": "Jane"
+          },
+          "email": {
+            "type": "string",
+            "example": "jane.doe@example.com"
+          },
+          "role": {
+            "type": "string",
+            "description": "Role of the user in the group.",
+            "enum": [
+              "admin",
+              "member"
+            ],
+            "example": "admin"
+          },
+          "status": {
+            "type": "string",
+            "description": "Membership status of the user in the group.",
+            "enum": [
+              "active",
+              "declined",
+              "left",
+              "pending",
+              "removed"
+            ],
+            "example": "active"
+          },
+          "joinedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Date and time when the user joined the group.",
+            "example": "2026-07-20T10:15:30.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "lastname",
+          "firstname",
+          "email",
+          "role",
+          "status",
+          "joinedAt"
+        ]
+      },
+      "GroupDetailsResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique group identifier.",
+            "example": "a590d72e-4a13-4a68-8e73-1f8c2c905f53"
+          },
+          "name": {
+            "type": "string",
+            "description": "Group name.",
+            "example": "Family dinners"
+          },
+          "frequency": {
+            "type": "string",
+            "description": "Meal planning frequency for the group.",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "example": "weekly"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Identifier of the user who created the group.",
+            "example": "3f6f9824-f4da-4a77-bb6a-5bf1fd9be7d2"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Group creation date and time.",
+            "example": "2026-07-20T10:15:30.000Z"
+          },
+          "membersCount": {
+            "type": "number",
+            "description": "Number of active members in the group.",
+            "example": 2
+          },
+          "members": {
+            "description": "Active users linked to the group.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupMemberResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "frequency",
+          "createdBy",
+          "createdAt",
+          "membersCount",
+          "members"
         ]
       },
       "MeMembershipGroupResponseDto": {
