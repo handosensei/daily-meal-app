@@ -88,8 +88,14 @@ test('web export serves the public app routes and API documentation over HTTP', 
   const server = await createStaticServer();
 
   try {
-    const homeHtml = await fetchText(server.origin, '/');
-    assert.match(homeHtml, /DailyMeal/);
+    const loginHtml = await fetchText(server.origin, '/login');
+    assert.match(loginHtml, /DailyMeal/);
+
+    const signupHtml = await fetchText(server.origin, '/signup');
+    assert.match(signupHtml, /Créer un compte/);
+
+    const groupsHtml = await fetchText(server.origin, '/groups');
+    assert.match(groupsHtml, /Mes groupes/);
 
     const apiHtml = await fetchText(server.origin, '/api');
     assert.match(apiHtml, /Daily Meal API/);

@@ -34,17 +34,34 @@ jest.mock('expo-web-browser', () => ({
 jest.mock('expo-router', () => {
   const React = require('react');
   const { View } = require('react-native');
+  let localSearchParams: Record<string, string | undefined> = {};
+  const router = {
+    push: jest.fn(),
+    replace: jest.fn(),
+  };
 
   const Link = ({ children, onPress, ...props }: Record<string, unknown>) =>
     React.createElement(View, { ...props, onClick: onPress }, children);
 
   return {
+    __resetRouter: () => {
+      router.push.mockClear();
+      router.replace.mockClear();
+      localSearchParams = {};
+    },
+    __router: router,
+    __setLocalSearchParams: (params: Record<string, string | undefined>) => {
+      localSearchParams = params;
+    },
     DarkTheme: { dark: true },
     DefaultTheme: { dark: false },
     Link,
+    Redirect: ({ href }: { href: string }) => React.createElement(View, { href, testID: 'redirect' }),
     Slot: () => React.createElement(View, { testID: 'slot' }),
     ThemeProvider: ({ children, value }: { children: React.ReactNode; value: unknown }) =>
       React.createElement(View, { testID: 'theme-provider', value }, children),
+    useLocalSearchParams: () => localSearchParams,
+    useRouter: () => router,
   };
 });
 

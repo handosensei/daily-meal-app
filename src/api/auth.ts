@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '@/api/config';
+
 type LoginRequest = {
   email: string;
   password: string;
@@ -18,6 +20,18 @@ export type LoginResponse = {
   accessToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
+  emailVerified?: boolean;
+};
+
+export type PublicUserResponse = {
+  id: string;
+  lastname: string;
+  firstname: string;
+  email: string;
+  provider: unknown | null;
+  emailVerified: boolean;
+  createdAt: string;
+  lastLogin: string | null;
 };
 
 export class InvalidCredentialsError extends Error {
@@ -32,18 +46,6 @@ export class EmailAlreadyExistsError extends Error {
     super('A user with this email already exists');
     this.name = 'EmailAlreadyExistsError';
   }
-}
-
-const DEFAULT_API_BASE_URL = 'http://localhost:3000';
-
-function getApiBaseUrl() {
-  const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
-
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/$/, '');
-  }
-
-  return DEFAULT_API_BASE_URL;
 }
 
 async function postJsonRequest<TResponse, TPayload>(
@@ -83,7 +85,7 @@ export function loginWithGoogle(payload: GoogleLoginRequest) {
 }
 
 export function registerUser(payload: RegisterRequest) {
-  return postJsonRequest('/users', {
+  return postJsonRequest<PublicUserResponse, RegisterRequest & { passwordConfirmation: string }>('/users', {
     ...payload,
     passwordConfirmation: payload.password,
   });
