@@ -13,7 +13,6 @@ test('web tabs render tab triggers and docs link', async () => {
 
   expect(screen.getByText('Home')).toBeOnTheScreen();
   expect(screen.getByText('Explore')).toBeOnTheScreen();
-  expect(screen.getByText('API')).toBeOnTheScreen();
   expect(screen.getByText('Docs')).toBeOnTheScreen();
 });
 

@@ -46,11 +46,3 @@ npm run test:functional
 
 `npm run test:functional` verifie les routes publiques de l'export web Expo,
 dans un esprit Cypress-like sans dependance supplementaire.
-
-## Documentation API
-
-Le contrat Swagger/OpenAPI est disponible dans
-`public/swagger/openapi.json`. L'application l'importe via
-`src/api/openapi.ts` pour connaitre les endpoints disponibles.
-
-En mode web, la page Swagger UI est servie depuis `/swagger/index.html`.
