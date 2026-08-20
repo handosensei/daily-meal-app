@@ -764,6 +764,50 @@ test('shows member first name without a last initial when the last name is blank
   expect(screen.getByText('Sam')).toBeOnTheScreen();
 });
 
+test('keeps the group detail visible when a member name is missing from the API response', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  const groupDetailRequest = createDeferred<Awaited<ReturnType<typeof getGroup>>>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  getGroupMock.mockReturnValue(groupDetailRequest.promise);
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve([
+      {
+        id: 'home',
+        name: 'Maison Perret',
+        createdBy: 'sam',
+        createdAt: '2026-08-19T08:00:00.000Z',
+        membersCount: 1,
+        role: 'admin',
+      },
+    ] satisfies MeGroupResponse[]);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Maison Perret, Responsable, 1 membre'));
+
+  await act(async () => {
+    groupDetailRequest.resolve({
+      id: 'home',
+      name: 'Maison Perret',
+      frequency: 'Planning à la semaine',
+      membersCount: 1,
+      role: 'admin',
+      members: [{ id: 'guest', role: 'member' }],
+    });
+  });
+
+  expect(screen.getByText('Maison Perret')).toBeOnTheScreen();
+  expect(screen.getAllByText('Membre').length).toBeGreaterThanOrEqual(2);
+});
+
 test('keeps the groups list mounted when a group is selected without an auth session', async () => {
   await render(<GroupsRoute />);
 

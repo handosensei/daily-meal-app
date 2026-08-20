@@ -749,18 +749,20 @@ function getSummaryMembers(group: MeGroupResponse | GroupResponse, members: Grou
   return Array.from({ length: Math.min(group.membersCount, 4) }, (_, index) => ({
     id: `${group.id}-placeholder-${index}`,
     firstName: group.name.charAt(index),
+    lastName: '',
     role: 'member' as const,
   }));
 }
 
-function getMemberInitial(firstName: string) {
-  return firstName.trim().charAt(0).toUpperCase();
+function getMemberInitial(firstName?: string) {
+  return firstName?.trim().charAt(0).toUpperCase() || '?';
 }
 
 function getMemberDisplayName(member: GroupResponse['members'][number]) {
-  const lastInitial = member.lastName.trim().charAt(0).toUpperCase();
+  const firstName = member.firstName?.trim() || 'Membre';
+  const lastInitial = member.lastName?.trim().charAt(0).toUpperCase();
 
-  return lastInitial ? `${member.firstName} ${lastInitial}.` : member.firstName;
+  return lastInitial ? `${firstName} ${lastInitial}.` : firstName;
 }
 
 function getMemberColor(index: number) {

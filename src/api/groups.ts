@@ -20,8 +20,8 @@ export type GroupResponse = {
 
 export type GroupMemberResponse = {
   id: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   role: 'admin' | 'member';
 };
 
