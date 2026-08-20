@@ -7,6 +7,13 @@ export type MeGroupResponse = {
   createdAt: string;
   membersCount: number;
   role: 'admin' | 'member';
+  members?: GroupMemberResponse[];
+};
+
+export type GroupMemberResponse = {
+  id: string;
+  firstName: string;
+  role: 'admin' | 'member';
 };
 
 export class GroupsAuthenticationError extends Error {

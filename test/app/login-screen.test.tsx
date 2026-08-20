@@ -402,6 +402,12 @@ test('shows authenticated user groups on the groups page', async () => {
       createdAt: '2026-08-19T08:00:00.000Z',
       membersCount: 4,
       role: 'admin',
+      members: [
+        { id: 'sam', firstName: 'Sam', role: 'admin' },
+        { id: 'mo', firstName: 'Mo', role: 'member' },
+        { id: 'lina', firstName: 'Lina', role: 'member' },
+        { id: 'theo', firstName: 'Théo', role: 'member' },
+      ],
     },
     {
       id: 'flatshare',
@@ -433,6 +439,55 @@ test('shows authenticated user groups on the groups page', async () => {
   expect(connectedPressedStyles?.length).toBeGreaterThanOrEqual(3);
   fireEvent.press(screen.getByText(groupActionLabel));
   fireEvent.press(screen.getByLabelText('Maison Perret, Responsable, 4 membres'));
+  expect(screen.getByLabelText('Retour à la liste des groupes')).toBeOnTheScreen();
+  expect(screen.getByLabelText('Paramètres du groupe Maison Perret')).toBeOnTheScreen();
+  expect(screen.getByText('Membres & rôles')).toBeOnTheScreen();
+  expect(screen.getByText('Sam')).toBeOnTheScreen();
+  expect(screen.getByText('Admin')).toBeOnTheScreen();
+  expect(screen.getByText('Mo')).toBeOnTheScreen();
+  expect(screen.getAllByText('Membre').length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText('Inviter')).toBeOnTheScreen();
+  const detailPressedStyles = result.root
+    ?.findAll((node) => typeof node.props.style === 'function')
+    .map((node) => [node.props.style({ pressed: false }), node.props.style({ pressed: true })]);
+  expect(detailPressedStyles?.length).toBeGreaterThanOrEqual(3);
+  fireEvent.press(screen.getByLabelText('Paramètres du groupe Maison Perret'));
+  fireEvent.press(screen.getByLabelText('Inviter des membres dans Maison Perret'));
+  fireEvent.press(screen.getByLabelText('Retour à la liste des groupes'));
+  expect(screen.getByText('Coloc Voltaire')).toBeOnTheScreen();
+});
+
+test('shows a calm empty members state when a selected group has no member details yet', async () => {
+  expoRouterMock.__setLocalSearchParams({ emailVerified: 'true' });
+  setAuthSession({
+    accessToken: 'token',
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    emailVerified: true,
+  });
+  const groupsRequest = createDeferred<MeGroupResponse[]>();
+  listMyGroupsMock.mockReturnValue(groupsRequest.promise);
+  const groups = [
+    {
+      id: 'flatshare',
+      name: 'Coloc Voltaire',
+      createdBy: 'alex',
+      createdAt: '2026-08-18T08:00:00.000Z',
+      membersCount: 1,
+      role: 'member',
+    },
+  ] satisfies MeGroupResponse[];
+  await render(<GroupsRoute />);
+
+  await act(async () => {
+    groupsRequest.resolve(groups);
+  });
+
+  fireEvent.press(await screen.findByLabelText('Coloc Voltaire, Membre, 1 membre'));
+
+  expect(screen.getByText('Coloc Voltaire')).toBeOnTheScreen();
+  expect(screen.getByText('Les membres seront affichés dès que le groupe sera synchronisé.')).toBeOnTheScreen();
+  expect(screen.getByText('Inviter')).toBeOnTheScreen();
 });
 
 test('hides the group action on the groups page when email is not verified', async () => {
