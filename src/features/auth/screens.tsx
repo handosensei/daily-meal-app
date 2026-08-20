@@ -19,7 +19,13 @@ import {
   loginWithPassword,
   registerUser,
 } from '@/api/auth';
-import { GroupsAuthenticationError, listMyGroups, type MeGroupResponse } from '@/api/groups';
+import {
+  getGroup,
+  GroupsAuthenticationError,
+  listMyGroups,
+  type GroupResponse,
+  type MeGroupResponse,
+} from '@/api/groups';
 import { requestGoogleIdToken } from '@/api/googleIdentity';
 import { ThemedText } from '@/components/themed-text';
 import { getAuthSession, setAuthSession } from '@/features/auth/session';
@@ -402,7 +408,7 @@ export function GroupsScreen() {
   const authSession = getAuthSession();
   const canCreateOrJoinGroup = emailVerified === 'true' || authSession?.emailVerified === true;
   const [groups, setGroups] = useState<MeGroupResponse[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<MeGroupResponse | null>(null);
+  const [selectedGroupSummary, setSelectedGroupSummary] = useState<MeGroupResponse | null>(null);
   const [isLoadingGroups, setLoadingGroups] = useState(true);
   const [groupsErrorMessage, setGroupsErrorMessage] = useState('');
 
@@ -447,8 +453,14 @@ export function GroupsScreen() {
     };
   }, [authSession]);
 
-  if (selectedGroup) {
-    return <GroupDetailScreen group={selectedGroup} onBack={() => setSelectedGroup(null)} />;
+  if (selectedGroupSummary && authSession) {
+    return (
+      <GroupDetailScreen
+        accessToken={authSession.accessToken}
+        groupSummary={selectedGroupSummary}
+        onBack={() => setSelectedGroupSummary(null)}
+      />
+    );
   }
 
   return (
@@ -487,7 +499,7 @@ export function GroupsScreen() {
           {!isLoadingGroups && !groupsErrorMessage && groups.length > 0 ? (
             <View style={styles.groupList}>
               {groups.map((group) => (
-                <GroupCard group={group} key={group.id} onPress={() => setSelectedGroup(group)} />
+                <GroupCard group={group} key={group.id} onPress={() => setSelectedGroupSummary(group)} />
               ))}
             </View>
           ) : null}
@@ -543,9 +555,57 @@ function GroupCard({ group, onPress }: { group: MeGroupResponse; onPress: () => 
   );
 }
 
-function GroupDetailScreen({ group, onBack }: { group: MeGroupResponse; onBack: () => void }) {
-  const members = group.members ?? [];
-  const membersLabel = `${group.membersCount} ${group.membersCount > 1 ? 'membres' : 'membre'}`;
+function GroupDetailScreen({
+  accessToken,
+  groupSummary,
+  onBack,
+}: {
+  accessToken: string;
+  groupSummary: MeGroupResponse;
+  onBack: () => void;
+}) {
+  const [group, setGroup] = useState<GroupResponse | null>(null);
+  const [isLoadingGroup, setLoadingGroup] = useState(true);
+  const [groupErrorMessage, setGroupErrorMessage] = useState('');
+  const activeGroup = group ?? groupSummary;
+  const members = group?.members ?? [];
+  const membersCount = group?.membersCount ?? groupSummary.membersCount;
+  const membersLabel = `${membersCount} ${membersCount > 1 ? 'membres' : 'membre'}`;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGroup() {
+      setLoadingGroup(true);
+      setGroupErrorMessage('');
+
+      try {
+        const loadedGroup = await getGroup(accessToken, groupSummary.id);
+
+        if (isMounted) {
+          setGroup(loadedGroup);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setGroupErrorMessage(
+            error instanceof GroupsAuthenticationError
+              ? 'Votre session a expiré. Connectez-vous à nouveau.'
+              : 'Impossible de charger ce groupe pour le moment.',
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingGroup(false);
+        }
+      }
+    }
+
+    loadGroup();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, groupSummary.id]);
 
   return (
     <SafeAreaView style={styles.connectedContainer}>
@@ -559,11 +619,18 @@ function GroupDetailScreen({ group, onBack }: { group: MeGroupResponse; onBack: 
               style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
               <ThemedText style={styles.iconButtonText}>‹</ThemedText>
             </Pressable>
-            <ThemedText accessibilityRole="header" numberOfLines={2} style={styles.groupDetailTitle}>
-              {group.name}
-            </ThemedText>
+            <View style={styles.groupTitleBlock}>
+              <ThemedText accessibilityRole="header" numberOfLines={2} style={styles.groupDetailTitle}>
+                {activeGroup.name}
+              </ThemedText>
+              {group?.frequency ? (
+                <ThemedText numberOfLines={2} style={styles.groupFrequency}>
+                  {group.frequency}
+                </ThemedText>
+              ) : null}
+            </View>
             <Pressable
-              accessibilityLabel={`Paramètres du groupe ${group.name}`}
+              accessibilityLabel={`Paramètres du groupe ${activeGroup.name}`}
               accessibilityRole="button"
               onPress={() => undefined}
               style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
@@ -576,7 +643,7 @@ function GroupDetailScreen({ group, onBack }: { group: MeGroupResponse; onBack: 
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
               style={styles.memberStack}>
-              {getSummaryMembers(group).map((member, index) => (
+              {getSummaryMembers(activeGroup, members).map((member, index) => (
                 <View
                   key={member.id}
                   style={[
@@ -589,7 +656,7 @@ function GroupDetailScreen({ group, onBack }: { group: MeGroupResponse; onBack: 
             </View>
             <View style={styles.summaryTextBlock}>
               <ThemedText style={styles.summaryCount}>{membersLabel}</ThemedText>
-              <ThemedText style={styles.summarySubtitle}>Planning à la semaine</ThemedText>
+              <ThemedText style={styles.summarySubtitle}>{group?.frequency ?? 'Chargement de la fréquence'}</ThemedText>
             </View>
           </View>
 
@@ -598,22 +665,37 @@ function GroupDetailScreen({ group, onBack }: { group: MeGroupResponse; onBack: 
             <ThemedText style={styles.membersSectionCount}>{membersLabel}</ThemedText>
           </View>
 
-          {members.length > 0 ? (
+          {isLoadingGroup ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ActivityIndicator color="#A83E60" />
+              <ThemedText style={styles.groupsStateText}>Chargement du groupe...</ThemedText>
+            </View>
+          ) : null}
+
+          {!isLoadingGroup && groupErrorMessage ? (
+            <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
+              <ThemedText style={styles.errorText}>{groupErrorMessage}</ThemedText>
+            </View>
+          ) : null}
+
+          {!isLoadingGroup && !groupErrorMessage && members.length > 0 ? (
             <View style={styles.memberList}>
               {members.map((member, index) => (
                 <MemberRow key={member.id} member={member} index={index} />
               ))}
             </View>
-          ) : (
+          ) : null}
+
+          {!isLoadingGroup && !groupErrorMessage && members.length === 0 ? (
             <View accessibilityLiveRegion="polite" style={styles.groupsStateBox}>
               <ThemedText style={styles.groupsStateText}>
-                Les membres seront affichés dès que le groupe sera synchronisé.
+                Aucun membre à afficher pour le moment.
               </ThemedText>
             </View>
-          )}
+          ) : null}
 
           <Pressable
-            accessibilityLabel={`Inviter des membres dans ${group.name}`}
+            accessibilityLabel={`Inviter des membres dans ${activeGroup.name}`}
             accessibilityRole="button"
             onPress={() => undefined}
             style={({ pressed }) => [styles.primaryButton, styles.inviteButton, pressed && styles.pressed]}>
@@ -630,20 +712,20 @@ function MemberRow({
   member,
   index,
 }: {
-  member: NonNullable<MeGroupResponse['members']>[number];
+  member: GroupResponse['members'][number];
   index: number;
 }) {
   const roleLabel = member.role === 'admin' ? 'Admin' : 'Membre';
 
   return (
-    <View accessibilityLabel={`${member.firstName}, ${roleLabel}`} style={styles.memberRow}>
+    <View accessibilityLabel={`${getMemberDisplayName(member)}, ${roleLabel}`} style={styles.memberRow}>
       <View style={[styles.memberAvatar, { backgroundColor: getMemberColor(index) }]}>
         <ThemedText style={styles.memberAvatarText}>{getMemberInitial(member.firstName)}</ThemedText>
       </View>
       <View style={styles.memberDetails}>
         <View style={styles.memberNameRow}>
           <ThemedText numberOfLines={1} style={styles.memberName}>
-            {member.firstName}
+            {getMemberDisplayName(member)}
           </ThemedText>
           <View style={[styles.roleBadge, member.role === 'admin' && styles.adminRoleBadge]}>
             <ThemedText style={[styles.roleBadgeText, member.role === 'admin' && styles.adminRoleBadgeText]}>
@@ -659,9 +741,9 @@ function MemberRow({
   );
 }
 
-function getSummaryMembers(group: MeGroupResponse) {
-  if (group.members && group.members.length > 0) {
-    return group.members.slice(0, 4);
+function getSummaryMembers(group: MeGroupResponse | GroupResponse, members: GroupResponse['members']) {
+  if (members.length > 0) {
+    return members.slice(0, 4);
   }
 
   return Array.from({ length: Math.min(group.membersCount, 4) }, (_, index) => ({
@@ -673,6 +755,12 @@ function getSummaryMembers(group: MeGroupResponse) {
 
 function getMemberInitial(firstName: string) {
   return firstName.trim().charAt(0).toUpperCase();
+}
+
+function getMemberDisplayName(member: GroupResponse['members'][number]) {
+  const lastInitial = member.lastName.trim().charAt(0).toUpperCase();
+
+  return lastInitial ? `${member.firstName} ${lastInitial}.` : member.firstName;
 }
 
 function getMemberColor(index: number) {
@@ -1164,12 +1252,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 28,
   },
-  groupDetailTitle: {
+  groupTitleBlock: {
     flex: 1,
+    gap: 2,
+  },
+  groupDetailTitle: {
     color: '#2E2529',
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 30,
+  },
+  groupFrequency: {
+    color: '#6E6268',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
   },
   groupSummaryCard: {
     minHeight: 80,
